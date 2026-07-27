@@ -1,0 +1,14 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+
+# Capture output
+*.h2d.json
+*.h2d.gz
+out/
+tmp/
+
+# Test artifacts
+fixtures/**/actual/
+coverage/

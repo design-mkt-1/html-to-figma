@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Layout fixture</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: Arial, Helvetica, sans-serif;
+        background: #f4f5f7;
+        color: #14161a;
+      }
+
+      /* Horizontal flex with a uniform gap. */
+      .toolbar {
+        display: flex;
+        gap: 16px;
+        padding: 20px 24px;
+        background: #ffffff;
+        border-bottom: 1px solid #d8dce3;
+        align-items: center;
+      }
+      .toolbar .chip {
+        width: 96px;
+        height: 36px;
+        border-radius: 18px;
+        background: #2563eb;
+      }
+
+      /* Vertical block flow with collapsed margins. */
+      .stack {
+        padding: 24px;
+      }
+      .stack > .card {
+        background: #ffffff;
+        border: 1px solid #d8dce3;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 20px;
+        box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+      }
+      .stack > .card:last-child {
+        margin-bottom: 0;
+      }
+
+      /* Wrapping grid of equal tiles. */
+      .grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 0 24px 24px;
+      }
+      .grid .tile {
+        width: 140px;
+        height: 80px;
+        border-radius: 8px;
+        background: #10b981;
+      }
+
+      /* space-between row. */
+      .split {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 24px;
+        background: #111827;
+        color: #ffffff;
+      }
+
+      /* Centred column. */
+      .centered {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 32px 0;
+      }
+      .centered .pill {
+        width: 200px;
+        height: 24px;
+        background: #f59e0b;
+        border-radius: 4px;
+      }
+
+      /* Absolute positioning and overlap. */
+      .overlap {
+        position: relative;
+        height: 120px;
+        margin: 24px;
+        background: #e5e7eb;
+        border-radius: 8px;
+      }
+      .overlap .badge {
+        position: absolute;
+        top: 16px;
+        left: 16px;
+        width: 64px;
+        height: 64px;
+        background: #ef4444;
+        border-radius: 50%;
+      }
+      .overlap .badge.second {
+        left: 48px;
+        background: rgba(59, 130, 246, 0.7);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar">
+      <div class="chip"></div>
+      <div class="chip"></div>
+      <div class="chip"></div>
+    </div>
+
+    <div class="split">
+      <div style="width: 120px; height: 32px; background: #374151"></div>
+      <div style="width: 80px; height: 32px; background: #374151"></div>
+    </div>
+
+    <div class="stack">
+      <div class="card">
+        <p style="margin: 0">
+          A paragraph with <strong>bold text</strong>, an
+          <a href="#" style="color: #2563eb">inline link</a> and some
+          <em>emphasis</em> to exercise text segmentation.
+        </p>
+      </div>
+      <div class="card">
+        <h2 style="margin: 0 0 8px">A heading</h2>
+        <p style="margin: 0; color: #667085">Secondary copy in a muted colour.</p>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="tile"></div>
+      <div class="tile"></div>
+      <div class="tile"></div>
+      <div class="tile"></div>
+      <div class="tile"></div>
+    </div>
+
+    <div class="centered">
+      <div class="pill"></div>
+      <div class="pill"></div>
+    </div>
+
+    <div class="overlap">
+      <div class="badge"></div>
+      <div class="badge second"></div>
+    </div>
+  </body>
+</html>

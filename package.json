@@ -1,0 +1,32 @@
+{
+  "name": "html-to-figma",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Capture any website and rebuild it as editable Figma layers",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "build:capture": "npm run build -w @h2f/capture",
+    "build:cli": "npm run build -w @h2f/cli",
+    "build:plugin": "npm run build -w @h2f/plugin",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "esbuild": "^0.24.2",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

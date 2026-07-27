@@ -46,12 +46,27 @@ npm install
 npm run build
 ```
 
-Chromium comes from Playwright. If your environment already has one, point at
-it instead of downloading another:
+Capturing needs a Chromium that matches the pinned Playwright version:
+
+```bash
+npx playwright install chromium
+```
+
+If your machine already has one you would rather use, skip that and point at it:
 
 ```bash
 export H2F_CHROMIUM=/path/to/chrome
 ```
+
+### Try it without leaving the repo
+
+```bash
+npm run demo
+```
+
+Serves `fixtures/site.html`, captures it, and writes `out/demo.h2d.json` next to
+a `out/demo-reference.png` of the same page. Good for checking the toolchain
+works before pointing it at anything real.
 
 ## Capturing
 

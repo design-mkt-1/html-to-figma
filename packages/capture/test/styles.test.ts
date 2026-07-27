@@ -100,10 +100,7 @@ describe('gradients', () => {
   });
 
   it('interpolates omitted interior stop positions', () => {
-    const gradient = parseGradient(
-      'linear-gradient(red 0%, green, blue, white 100%)',
-      BOX,
-    )!;
+    const gradient = parseGradient('linear-gradient(red 0%, green, blue, white 100%)', BOX)!;
 
     expect(gradient.stops.map((s) => Math.round(s.position * 100))).toEqual([0, 33, 67, 100]);
   });
@@ -221,9 +218,9 @@ describe('transforms', () => {
     // than reproduced incorrectly.
     expect(analyzeTransform('matrix(1, 0, 0.5, 1, 0, 0)').kind).toBe('UNSUPPORTED');
     expect(analyzeTransform('matrix(-1, 0, 0, 1, 0, 0)').kind).toBe('UNSUPPORTED');
-    expect(
-      analyzeTransform('matrix3d(1,0,0,0, 0,1,0,0, 0,0,1,0.002, 0,0,0,1)').kind,
-    ).toBe('UNSUPPORTED');
+    expect(analyzeTransform('matrix3d(1,0,0,0, 0,1,0,0, 0,0,1,0.002, 0,0,0,1)').kind).toBe(
+      'UNSUPPORTED',
+    );
   });
 
   it('rejects a degenerate matrix', () => {

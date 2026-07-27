@@ -24,12 +24,12 @@ npx h2f capture https://example.com -o example.h2d.json
           by a browser extension later
 ```
 
-| Package | What it does |
-| --- | --- |
-| `packages/schema` | The intermediate representation both halves agree on, plus a validator |
+| Package            | What it does                                                                    |
+| ------------------ | ------------------------------------------------------------------------------- |
+| `packages/schema`  | The intermediate representation both halves agree on, plus a validator          |
 | `packages/capture` | Browser-only DOM walker. Bundled as a standalone IIFE with no Node dependencies |
-| `packages/cli` | Playwright driver: launches Chromium, prepares the page, resolves assets |
-| `packages/plugin` | The Figma plugin: IR → Figma nodes |
+| `packages/cli`     | Playwright driver: launches Chromium, prepares the page, resolves assets        |
+| `packages/plugin`  | The Figma plugin: IR → Figma nodes                                              |
 
 The capture engine never downloads image bytes. It records resolved URLs and
 lets the host fetch them, which sidesteps CORS entirely — and is exactly the
@@ -59,23 +59,29 @@ export H2F_CHROMIUM=/path/to/chrome
 node packages/cli/dist/h2f.mjs capture <url> [options]
 ```
 
-| Option | Default | |
-| --- | --- | --- |
-| `-o, --out <file>` | `capture.h2d.json` | Output path |
-| `--viewport <px>` | `1920` | Viewport width; repeat for several breakpoints in one file |
-| `--viewport-height <px>` | `1080` | |
-| `--theme <light\|dark>` | `light` | Emulates `prefers-color-scheme` |
-| `--lang <locale>` | `en-US` | |
-| `--wait <state>` | `networkidle` | `load`, `domcontentloaded`, `networkidle`, `commit` |
-| `--delay <ms>` | `500` | Extra settle time after load |
-| `--click <selector>` | — | Click before capturing; repeatable. For cookie banners |
-| `--hide <selector>` | — | Remove before capturing; repeatable |
-| `--no-auto-layout` | — | Emit everything absolutely positioned |
-| `--scale <n>` | `2` | Device pixel ratio for images |
-| `--max-image-dim <px>` | `4096` | Downscale above this. Figma rejects larger images |
-| `--compress` | — | Write gzipped `.h2d.gz` |
-| `--screenshot <file>` | — | Also save a reference PNG to compare against |
-| `-v, --verbose` | — | Log progress |
+| Option                   | Default            |                                                            |
+| ------------------------ | ------------------ | ---------------------------------------------------------- |
+| `-o, --out <file>`       | `capture.h2d.json` | Output path                                                |
+| `--viewport <px>`        | `1920`             | Viewport width; repeat for several breakpoints in one file |
+| `--viewport-height <px>` | `1080`             |                                                            |
+| `--theme <light\|dark>`  | `light`            | Emulates `prefers-color-scheme`                            |
+| `--lang <locale>`        | `en-US`            |                                                            |
+| `--wait <state>`         | `networkidle`      | `load`, `domcontentloaded`, `networkidle`, `commit`        |
+| `--delay <ms>`           | `500`              | Extra settle time after load                               |
+| `--click <selector>`     | —                  | Click before capturing; repeatable. For cookie banners     |
+| `--hide <selector>`      | —                  | Remove before capturing; repeatable                        |
+| `--no-auto-layout`       | —                  | Emit everything absolutely positioned                      |
+| `--scale <n>`            | `2`                | Device pixel ratio for images                              |
+| `--max-image-dim <px>`   | `4096`             | Downscale above this. Figma rejects larger images          |
+| `--compress`             | —                  | Write gzipped `.h2d.gz`                                    |
+| `--screenshot <file>`    | —                  | Also save a reference PNG to compare against               |
+| `--proxy <url>`          | `$HTTPS_PROXY`     | HTTP proxy. Chromium does not read the environment itself  |
+| `--no-proxy`             | —                  | Ignore the proxy environment variables                     |
+| `--insecure`             | —                  | Accept invalid TLS certificates                            |
+| `-v, --verbose`          | —                  | Log progress                                               |
+
+Loopback URLs never go through a proxy, so capturing your own dev server works
+behind a corporate one.
 
 ```bash
 # Several breakpoints in one file
@@ -110,7 +116,7 @@ shadow DOM, same-origin iframes · `::before` / `::after` on decorative boxes
 **Flattened to an image**, because Figma has no equivalent:
 
 skew and 3D transforms · `mask-image` · `clip-path` · filters like `saturate` and
-`hue-rotate` · `<canvas>` · cross-origin iframes · rotated *containers* (a
+`hue-rotate` · `<canvas>` · cross-origin iframes · rotated _containers_ (a
 rotated leaf keeps its rotation)
 
 **Approximated**, and reported in the plugin's warnings panel:
@@ -143,7 +149,7 @@ can never break fidelity.
 
 ```bash
 npm run build       # all packages
-npm test            # 133 tests
+npm test            # 144 tests
 npm run typecheck
 npm run format
 ```

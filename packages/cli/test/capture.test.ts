@@ -1,10 +1,11 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import type { Capture, ElementNode, SceneNode } from '@h2f/schema';
 import { validateCapture } from '@h2f/schema';
 import { runCapture } from '../src/capture.js';
 import { parseCaptureArgs } from '../src/options.js';
+import { serve, type StaticServer } from './serve.js';
 
 /**
  * End-to-end capture tests.
@@ -269,6 +270,81 @@ describe('visual fixture', () => {
     // prune every one.
     for (const [ref, asset] of Object.entries(doc.assets)) {
       expect(asset.kind, `asset ${ref} was never resolved`).toMatch(/BITMAP|SVG/);
+    }
+  });
+});
+
+describe('padded text and http assets', () => {
+  let doc: Capture;
+  let server: StaticServer;
+
+  beforeAll(async () => {
+    // Served over HTTP rather than file:// so asset resolution exercises a real
+    // fetch — the path that exists to get around CORS.
+    server = await serve(FIXTURES);
+    const options = parseCaptureArgs([`${server.origin}/site.html`, '--viewport', '1440']);
+    doc = (await runCapture(options)).capture;
+  }, 120_000);
+
+  afterAll(async () => {
+    await server?.close();
+  });
+
+  /**
+   * Figma text layers have no padding. A padded, painted element therefore has
+   * to become a frame wrapping a text layer, or every button in the import ends
+   * up with its label jammed into the top-left corner of its background.
+   */
+  it('wraps a padded button in a frame carrying the padding', () => {
+    const button = byName(doc, 'cta') as ElementNode;
+
+    expect(button.kind).toBe('ELEMENT');
+    expect(button.fills.length).toBeGreaterThan(0);
+    expect(button.layout).toMatchObject({
+      mode: 'VERTICAL',
+      padding: { top: 10, right: 20, bottom: 10, left: 20 },
+    });
+
+    const label = button.children[0]!;
+    expect(label.kind).toBe('TEXT');
+    // Inset by the padding, not sitting at the frame's corner.
+    expect(label.rect).toMatchObject({ x: 20, y: 10 });
+  });
+
+  it('moves the background off the text layer and onto the wrapper', () => {
+    const button = byName(doc, 'cta') as ElementNode;
+    const label = button.children[0]!;
+
+    if (label.kind !== 'TEXT') throw new Error('expected a text node');
+    // Painting it twice would double up the shadow and the fill.
+    expect(label.fills).toEqual([]);
+    expect(label.stroke).toBeNull();
+  });
+
+  it('insets an unpainted padded element without adding a wrapper', () => {
+    const footer = byName(doc, 'footer') as ElementNode;
+
+    expect(footer.layout).toMatchObject({ padding: { right: 40, left: 40 } });
+    expect(footer.children[0]!.rect.x).toBe(40);
+  });
+
+  it('picks the srcset variant matching the device pixel ratio', () => {
+    // Captured at --scale 2, so the 2x source is what the browser chose.
+    const image = walk(doc.roots[0]!).find((node) => node.kind === 'IMAGE');
+    if (image?.kind !== 'IMAGE') throw new Error('expected an image node');
+
+    const asset = doc.assets[image.asset];
+    if (asset?.kind !== 'BITMAP') throw new Error('expected a bitmap');
+
+    expect(asset.source).toContain('photo@2x.png');
+    expect(asset.width).toBe(800);
+  });
+
+  it('fetches http assets that CORS would have blocked in the page', () => {
+    for (const asset of Object.values(doc.assets)) {
+      expect(asset.kind).toBe('BITMAP');
+      if (asset.kind !== 'BITMAP') continue;
+      expect(asset.bytes.length).toBeGreaterThan(0);
     }
   });
 });

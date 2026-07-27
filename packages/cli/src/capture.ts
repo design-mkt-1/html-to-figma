@@ -28,6 +28,9 @@ export async function runCapture(options: CaptureCommandOptions): Promise<Captur
     // Lets a sandboxed or air-gapped environment point at a Chromium it already
     // has, instead of requiring `playwright install` to reach the network.
     ...(process.env.H2F_CHROMIUM ? { executablePath: process.env.H2F_CHROMIUM } : {}),
+    ...(options.proxy
+      ? { proxy: { server: options.proxy, bypass: options.proxyBypass.join(',') } }
+      : {}),
   });
 
   try {
@@ -42,9 +45,9 @@ export async function runCapture(options: CaptureCommandOptions): Promise<Captur
         deviceScaleFactor: options.deviceScaleFactor,
         colorScheme: options.theme,
         locale: options.locale,
-        // A realistic UA matters: sites serve different markup to headless
-        // Chrome, and capturing the bot version of a page is not the goal.
-        userAgent: undefined,
+        // Needed behind a TLS-intercepting proxy, and for staging environments
+        // with self-signed certificates.
+        ignoreHTTPSErrors: options.insecure,
       });
 
       try {
@@ -62,7 +65,10 @@ export async function runCapture(options: CaptureCommandOptions): Promise<Captur
     if (!validation.ok) {
       throw new Error(
         `The capture failed validation, which is a bug. Please report it with the URL.\n` +
-          validation.errors.slice(0, 10).map((e) => `  - ${e}`).join('\n'),
+          validation.errors
+            .slice(0, 10)
+            .map((e) => `  - ${e}`)
+            .join('\n'),
       );
     }
 
@@ -95,7 +101,8 @@ async function captureViewport(
 
   log(options, '  preparing page');
   await page.evaluate(
-    (hideSelectors) => globalThis.__h2f.preparePage({ scrollDelay: 60, settleDelay: 250, hideSelectors }),
+    (hideSelectors) =>
+      globalThis.__h2f.preparePage({ scrollDelay: 60, settleDelay: 250, hideSelectors }),
     options.hideSelectors,
   );
 

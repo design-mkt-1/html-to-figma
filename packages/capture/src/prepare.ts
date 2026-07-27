@@ -93,10 +93,8 @@ function hide(selectors: string[]): void {
 async function scrollThroughPage(stepDelay: number): Promise<void> {
   const step = Math.max(200, Math.floor(window.innerHeight * 0.8));
   const maxScroll = () =>
-    Math.max(
-      document.documentElement.scrollHeight,
-      document.body?.scrollHeight ?? 0,
-    ) - window.innerHeight;
+    Math.max(document.documentElement.scrollHeight, document.body?.scrollHeight ?? 0) -
+    window.innerHeight;
 
   let position = 0;
   let guard = 0;

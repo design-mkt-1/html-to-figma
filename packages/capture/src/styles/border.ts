@@ -99,7 +99,11 @@ export interface CornerResult {
  * radius, and oversized radii are scaled down by the CSS overlap rule — without
  * which `border-radius: 9999px` would produce a 9999px corner instead of a pill.
  */
-export function parseCorners(style: CSSStyleDeclaration, width: number, height: number): CornerResult {
+export function parseCorners(
+  style: CSSStyleDeclaration,
+  width: number,
+  height: number,
+): CornerResult {
   let elliptical = false;
 
   const read = (property: string, reference: number): number => {

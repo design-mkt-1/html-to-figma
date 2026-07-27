@@ -261,7 +261,8 @@ export class Walker {
       if (element.childElementCount > 0) return 'transform.rotatedContainer';
     }
 
-    const mask = style.getPropertyValue('mask-image') || style.getPropertyValue('-webkit-mask-image');
+    const mask =
+      style.getPropertyValue('mask-image') || style.getPropertyValue('-webkit-mask-image');
     if (mask && mask !== 'none') return 'mask';
 
     if (style.clipPath && style.clipPath !== 'none') return 'clip-path';
@@ -307,7 +308,11 @@ export class Walker {
       effects: [],
       clipsContent: false,
       layout: { mode: 'ABSOLUTE' },
-      rasterize: this.assets.addRasterPlaceholder(id, Math.ceil(rect.width), Math.ceil(rect.height)),
+      rasterize: this.assets.addRasterPlaceholder(
+        id,
+        Math.ceil(rect.width),
+        Math.ceil(rect.height),
+      ),
       children: [],
     };
   }
@@ -341,7 +346,11 @@ export class Walker {
         const ref = this.assets.addPending(poster, Math.ceil(rect.width), Math.ceil(rect.height));
         if (ref) return this.makeImageNode(element, style, rect, ref, 'FILL', 'video poster');
       }
-      this.warn('video.noPoster', 'Video has no poster frame; captured as an empty box', nameFor(element));
+      this.warn(
+        'video.noPoster',
+        'Video has no poster frame; captured as an empty box',
+        nameFor(element),
+      );
       return null;
     }
 
@@ -365,7 +374,14 @@ export class Walker {
     );
     if (!ref) return null;
 
-    return this.makeImageNode(element, style, rect, ref, objectFitToScaleMode(style.objectFit), element.alt);
+    return this.makeImageNode(
+      element,
+      style,
+      rect,
+      ref,
+      objectFitToScaleMode(style.objectFit),
+      element.alt,
+    );
   }
 
   private svgNode(element: SVGElement, style: CSSStyleDeclaration, rect: Rect): SvgNode | null {
@@ -399,7 +415,11 @@ export class Walker {
       // Throws for a canvas tainted by cross-origin drawing.
       dataUrl = element.toDataURL('image/png');
     } catch {
-      this.warn('canvas.tainted', 'Canvas is cross-origin tainted and could not be read', nameFor(element));
+      this.warn(
+        'canvas.tainted',
+        'Canvas is cross-origin tainted and could not be read',
+        nameFor(element),
+      );
       return null;
     }
 
@@ -442,7 +462,18 @@ export class Walker {
   // Text
   // -------------------------------------------------------------------------
 
-  private textNode(element: Element, style: CSSStyleDeclaration, rect: Rect): TextNode | null {
+  /**
+   * Build a text layer, wrapping it in a frame when the element is padded.
+   *
+   * Figma text nodes have no padding. A button styled with
+   * `padding: 10px 20px` and a background therefore cannot be one text layer:
+   * the glyphs would sit flush against the corner of the coloured box. When
+   * there is padding *and* something painted, the element becomes a frame whose
+   * auto-layout padding reproduces the inset — which is also what a designer
+   * would have drawn by hand. With padding but nothing painted, insetting the
+   * text layer to the content box is enough.
+   */
+  private textNode(element: Element, style: CSSStyleDeclaration, rect: Rect): SceneNode | null {
     if (!isTextContainer(element)) return null;
 
     const sample = element.textContent ?? '';
@@ -463,14 +494,30 @@ export class Walker {
     const { stroke } = parseBorder(style);
     const { effects } = parseEffects(style);
     const background = parseBackground(style, rect, this.assets);
+    const inset = contentInset(style);
 
-    return {
+    const padded = inset.top + inset.right + inset.bottom + inset.left > 0.5;
+    const painted = background.paints.length > 0 || stroke !== null || effects.length > 0;
+
+    const contentWidth = Math.max(0, round(rect.width - inset.left - inset.right));
+    const contentHeight = Math.max(0, round(rect.height - inset.top - inset.bottom));
+
+    const text: TextNode = {
       kind: 'TEXT',
       id: this.nextId(),
       name: nameFor(element, content.characters),
-      rect,
-      opacity: opacityOf(style),
-      blendMode: blendModeOf(style),
+      rect: padded
+        ? {
+            // Relative to the wrapper when there is one, otherwise still
+            // relative to this element's own parent.
+            x: painted ? round(inset.left) : round(rect.x + inset.left),
+            y: painted ? round(inset.top) : round(rect.y + inset.top),
+            width: contentWidth,
+            height: contentHeight,
+          }
+        : rect,
+      opacity: painted ? 1 : opacityOf(style),
+      blendMode: painted ? 'NORMAL' : blendModeOf(style),
       rotation: 0,
       sizing: { ...DEFAULT_SIZING },
       characters: content.characters,
@@ -479,10 +526,39 @@ export class Walker {
       align: readTextAlign(style),
       verticalAlign: readVerticalAlign(style),
       maxLines: readMaxLines(style),
+      // Box decoration moves to the wrapper when there is one.
+      fills: painted ? [] : background.paints,
+      stroke: painted ? null : stroke,
+      corners: painted ? [0, 0, 0, 0] : corners,
+      effects: painted ? [] : effects,
+    };
+
+    if (!painted || !padded) return text;
+
+    return {
+      kind: 'ELEMENT',
+      id: this.nextId(),
+      name: nameFor(element),
+      rect,
+      opacity: opacityOf(style),
+      blendMode: blendModeOf(style),
+      rotation: 0,
+      sizing: { ...DEFAULT_SIZING },
       fills: background.paints,
       stroke,
       corners,
       effects,
+      clipsContent: clipsContent(style),
+      layout: {
+        mode: 'VERTICAL',
+        gap: 0,
+        counterGap: 0,
+        padding: inset,
+        wrap: false,
+        primaryAlign: 'MIN',
+        counterAlign: 'MIN',
+      },
+      children: [text],
     };
   }
 
@@ -538,7 +614,11 @@ export class Walker {
 
     const background = parseBackground(style, rect, this.assets);
     for (const unsupported of background.unsupported) {
-      this.warn('background.unsupported', `Could not convert background "${unsupported}"`, nameFor(element));
+      this.warn(
+        'background.unsupported',
+        `Could not convert background "${unsupported}"`,
+        nameFor(element),
+      );
     }
 
     const { stroke, mixedColors } = parseBorder(style);
@@ -754,7 +834,34 @@ function hasOwnBackground(style: CSSStyleDeclaration): boolean {
 
 function clipsContent(style: CSSStyleDeclaration): boolean {
   const overflow = `${style.overflowX} ${style.overflowY}`;
-  return overflow.includes('hidden') || overflow.includes('clip') || overflow.includes('auto') || overflow.includes('scroll');
+  return (
+    overflow.includes('hidden') ||
+    overflow.includes('clip') ||
+    overflow.includes('auto') ||
+    overflow.includes('scroll')
+  );
+}
+
+/**
+ * Distance from the border box to the content box, per side.
+ *
+ * Figma measures a frame's padding from its edge while CSS measures content
+ * from inside the border, so the border width belongs in this number.
+ */
+function contentInset(style: CSSStyleDeclaration): {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+} {
+  const side = (name: string) =>
+    Math.max(
+      0,
+      (toPixels(style.getPropertyValue(`padding-${name}`), 0) ?? 0) +
+        (toPixels(style.getPropertyValue(`border-${name}-width`), 0) ?? 0),
+    );
+
+  return { top: side('top'), right: side('right'), bottom: side('bottom'), left: side('left') };
 }
 
 function opacityOf(style: CSSStyleDeclaration): number {

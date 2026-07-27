@@ -91,7 +91,11 @@ function webp(b: Buffer): ImageSize | null {
 
   if (chunk === 'VP8 ') {
     // Lossy: dimensions live in the 10-byte frame header after the start code.
-    return { width: b.readUInt16LE(26) & 0x3fff, height: b.readUInt16LE(28) & 0x3fff, mimeType: 'image/webp' };
+    return {
+      width: b.readUInt16LE(26) & 0x3fff,
+      height: b.readUInt16LE(28) & 0x3fff,
+      mimeType: 'image/webp',
+    };
   }
 
   if (chunk === 'VP8L') {

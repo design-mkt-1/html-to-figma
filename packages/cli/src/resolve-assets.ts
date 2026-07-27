@@ -100,8 +100,7 @@ async function resolveOne(
 
   const header = readImageSize(bytes);
   const needsProbe = header === null;
-  const tooLarge =
-    header !== null && Math.max(header.width, header.height) > options.maxImageDim;
+  const tooLarge = header !== null && Math.max(header.width, header.height) > options.maxImageDim;
 
   if (!needsProbe && !tooLarge) {
     return {

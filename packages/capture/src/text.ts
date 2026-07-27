@@ -26,7 +26,8 @@ export function readTextStyle(style: CSSStyleDeclaration, sample: string): TextS
     italic,
     size,
     lineHeight: readLineHeight(style.lineHeight),
-    letterSpacing: style.letterSpacing === 'normal' ? 0 : (toPixels(style.letterSpacing, size) ?? 0),
+    letterSpacing:
+      style.letterSpacing === 'normal' ? 0 : (toPixels(style.letterSpacing, size) ?? 0),
     fills,
     decoration: readDecoration(style),
     textCase: readTextCase(style.textTransform),
@@ -195,12 +196,7 @@ function push(runs: Run[], text: string, style: TextStyle): void {
  * page actually shows. Without this, source indentation turns into runs of
  * spaces inside every Figma text layer.
  */
-function emitCollapsed(
-  raw: string,
-  style: TextStyle,
-  runs: Run[],
-  state: CollectState,
-): void {
+function emitCollapsed(raw: string, style: TextStyle, runs: Run[], state: CollectState): void {
   let buffer = '';
   let i = 0;
 
@@ -275,12 +271,14 @@ function styleDiff(base: TextStyle, style: TextStyle): Partial<TextStyle> | null
   if (style.weight !== base.weight) ((diff.weight = style.weight), (changed = true));
   if (style.italic !== base.italic) ((diff.italic = style.italic), (changed = true));
   if (Math.abs(style.size - base.size) > 0.01) ((diff.size = style.size), (changed = true));
-  if (style.lineHeight !== base.lineHeight) ((diff.lineHeight = style.lineHeight), (changed = true));
+  if (style.lineHeight !== base.lineHeight)
+    ((diff.lineHeight = style.lineHeight), (changed = true));
   if (Math.abs(style.letterSpacing - base.letterSpacing) > 0.01) {
     diff.letterSpacing = style.letterSpacing;
     changed = true;
   }
-  if (style.decoration !== base.decoration) ((diff.decoration = style.decoration), (changed = true));
+  if (style.decoration !== base.decoration)
+    ((diff.decoration = style.decoration), (changed = true));
   if (style.textCase !== base.textCase) ((diff.textCase = style.textCase), (changed = true));
   if (!sameFills(style.fills, base.fills)) ((diff.fills = style.fills), (changed = true));
 

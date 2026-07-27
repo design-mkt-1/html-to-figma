@@ -3,19 +3,12 @@
   "compilerOptions": {
     "outDir": ".tsbuild",
     "rootDir": "src",
-    "lib": [
-      "ES2022",
-      "DOM"
-    ],
-    "types": [
-      "node"
-    ],
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext"
   },
-  "include": [
-    "src/**/*.ts"
-  ],
+  "include": ["src/**/*.ts"],
   "references": [
     {
       "path": "../schema"

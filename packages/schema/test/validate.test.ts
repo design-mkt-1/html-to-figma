@@ -75,7 +75,9 @@ describe('validateCapture', () => {
   it('rejects duplicate node ids', () => {
     // Duplicate ids mean a merge went wrong and two viewports would share
     // assets.
-    const doc = capture({ roots: [root([{ ...root(), kind: 'ELEMENT' } as unknown as SceneNode])] });
+    const doc = capture({
+      roots: [root([{ ...root(), kind: 'ELEMENT' } as unknown as SceneNode])],
+    });
     const result = validateCapture(doc);
 
     expect(result.ok).toBe(false);

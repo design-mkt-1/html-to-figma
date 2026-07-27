@@ -97,19 +97,17 @@ function pickAxis(style: CSSStyleDeclaration, children: LayoutChild[]): Axis | n
 function inferAxisFromGeometry(children: LayoutChild[]): Axis | null {
   if (children.length === 1) return 'VERTICAL';
 
-  const sameRow = children.every(
-    (c) => Math.abs(c.rect.y - children[0]!.rect.y) < EPSILON,
-  );
+  const sameRow = children.every((c) => Math.abs(c.rect.y - children[0]!.rect.y) < EPSILON);
   if (sameRow) return 'HORIZONTAL';
 
-  const sameColumn = children.every(
-    (c) => Math.abs(c.rect.x - children[0]!.rect.x) < EPSILON,
-  );
+  const sameColumn = children.every((c) => Math.abs(c.rect.x - children[0]!.rect.x) < EPSILON);
   if (sameColumn) return 'VERTICAL';
 
   // Neither cleanly aligned — could still be a wrapping row.
   const sorted = [...children].sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x);
-  const firstRowCount = sorted.filter((c) => Math.abs(c.rect.y - sorted[0]!.rect.y) < EPSILON).length;
+  const firstRowCount = sorted.filter(
+    (c) => Math.abs(c.rect.y - sorted[0]!.rect.y) < EPSILON,
+  ).length;
   return firstRowCount > 1 ? 'HORIZONTAL' : 'VERTICAL';
 }
 
@@ -248,7 +246,8 @@ function analyzeCounterAxis(
 
   // All children span the full content box: stretch.
   const allFill = ordered.every(
-    (c, i) => Math.abs(starts[i]! - padStart) < EPSILON && Math.abs(ends[i]! - (extent - padEnd)) < EPSILON,
+    (c, i) =>
+      Math.abs(starts[i]! - padStart) < EPSILON && Math.abs(ends[i]! - (extent - padEnd)) < EPSILON,
   );
   if (allFill) return { align: 'MIN', padStart, padEnd, fill: true };
 
@@ -347,7 +346,10 @@ function wrapped(
       primaryAlign: style.justifyContent === 'space-between' ? 'SPACE_BETWEEN' : 'MIN',
       counterAlign: 'MIN',
     },
-    sizing: children.map(() => ({ horizontal: 'FIXED' as SizingMode, vertical: 'FIXED' as SizingMode })),
+    sizing: children.map(() => ({
+      horizontal: 'FIXED' as SizingMode,
+      vertical: 'FIXED' as SizingMode,
+    })),
   };
 }
 

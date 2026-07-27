@@ -35,7 +35,10 @@ function parseRgbFunction(value: string): Rgba | null {
   if (!match) return null;
 
   // Both legacy `rgb(1, 2, 3)` and modern `rgb(1 2 3 / 0.5)` syntax.
-  const parts = match[1]!.replace(/\//g, ' ').split(/[\s,]+/).filter(Boolean);
+  const parts = match[1]!
+    .replace(/\//g, ' ')
+    .split(/[\s,]+/)
+    .filter(Boolean);
   if (parts.length < 3) return null;
 
   const r = channel(parts[0]!);

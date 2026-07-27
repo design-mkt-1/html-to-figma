@@ -63,7 +63,7 @@ plugin then renders it as a single image and ignores `children`.
 
 `characters` is the rendered string, with CSS whitespace collapsing already
 applied. `base` is the node's style; `segments` carry only the properties that
-*differ*, over half-open `[start, end)` ranges, which is what lets
+_differ_, over half-open `[start, end)` ranges, which is what lets
 `<p>plain <a>link</a></p>` become one editable Figma layer.
 
 A separating space takes the style of the text node that contained it, not of
@@ -81,7 +81,7 @@ Deduplicated by content. Two kinds survive into a finished file:
 - `BITMAP` — base64 `bytes`, `mimeType`, intrinsic `width`/`height`
 - `SVG` — `markup`, ready for `figma.createNodeFromSvg`
 
-A third, `PENDING`, exists only *inside* the capture engine. It records a
+A third, `PENDING`, exists only _inside_ the capture engine. It records a
 resolved URL for the host to fetch. **A finished capture file must contain no
 `PENDING` assets**: the CLI either resolves them or prunes the referencing
 nodes, because an image layer with no image imports as an invisible empty frame.

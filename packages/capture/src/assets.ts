@@ -77,7 +77,10 @@ export class AssetRegistry {
 
 /** Resolve a possibly relative URL against the document, dropping unusable ones. */
 export function resolveUrl(url: string): string | null {
-  const trimmed = url.trim().replace(/^url\((.*)\)$/i, '$1').replace(/^["']|["']$/g, '');
+  const trimmed = url
+    .trim()
+    .replace(/^url\((.*)\)$/i, '$1')
+    .replace(/^["']|["']$/g, '');
   if (trimmed === '' || trimmed === 'none' || trimmed.startsWith('#')) return null;
 
   // `blob:` URLs are revoked when the page unloads, so the host would fetch a

@@ -10,7 +10,8 @@
 const MAX_NAME_LENGTH = 40;
 
 /** Utility-first class names carry no meaning worth putting in the layer list. */
-const UTILITY_CLASS = /^(?:[a-z]{1,3}-)?(?:\d|\[|(?:p|m|w|h|t|b|l|r|z|gap|flex|grid|text|bg|border|rounded|shadow|space|items|justify|self|col|row)[-xytblr]?-)/;
+const UTILITY_CLASS =
+  /^(?:[a-z]{1,3}-)?(?:\d|\[|(?:p|m|w|h|t|b|l|r|z|gap|flex|grid|text|bg|border|rounded|shadow|space|items|justify|self|col|row)[-xytblr]?-)/;
 
 export function nameFor(element: Element, textSample?: string): string {
   const aria = element.getAttribute('aria-label');

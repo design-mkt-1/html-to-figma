@@ -1,6 +1,12 @@
 import type { GradientPaint, GradientStop, Rgba } from '@h2f/schema';
 import { parseColor } from './color.js';
-import { parseFunction, splitTopLevel, splitWhitespace, toDegrees, toPixels } from './css-values.js';
+import {
+  parseFunction,
+  splitTopLevel,
+  splitWhitespace,
+  toDegrees,
+  toPixels,
+} from './css-values.js';
 
 export interface Box {
   width: number;
@@ -147,7 +153,7 @@ function parseRadial(args: string, box: Box, repeating: boolean): GradientPaint 
   }
 
   // Absolute stop positions are relative to the horizontal radius.
-  const lineLength = (radius.x * box.width) || 1;
+  const lineLength = radius.x * box.width || 1;
   const stops = parseStops(parts.slice(stopStart), lineLength, repeating);
   if (stops.length < 2) return null;
 

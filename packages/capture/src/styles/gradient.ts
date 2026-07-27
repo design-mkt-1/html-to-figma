@@ -120,9 +120,8 @@ function parseRadial(args: string, box: Box, repeating: boolean): GradientPaint 
   let radius = { x: 0.5, y: 0.5 };
   let stopStart = 0;
 
-  // The first item is a configuration clause only if it is not a colour stop.
   const head = parts[0]!;
-  if (head && !looksLikeColorStop(head)) {
+  if (head && isRadialConfig(head)) {
     stopStart = 1;
     const [shapePart, positionPart] = splitOnAt(head);
 
@@ -169,6 +168,26 @@ const SIZE_KEYWORDS = new Set([
   'farthest-side',
   'farthest-corner',
 ]);
+
+/**
+ * Does the first argument describe the gradient's shape and position, or is it
+ * already the first colour stop?
+ *
+ * Recognising the clause positively matters: `circle` and `ellipse` are
+ * indistinguishable from a named colour by shape alone, so testing "is this not
+ * a colour" silently drops the position of every `radial-gradient(circle at …)`.
+ */
+function isRadialConfig(part: string): boolean {
+  const tokens = splitWhitespace(part).map((t) => t.toLowerCase());
+  if (tokens.length === 0) return false;
+
+  if (tokens.includes('at')) return true;
+  if (tokens.includes('circle') || tokens.includes('ellipse')) return true;
+  if (tokens.some((t) => SIZE_KEYWORDS.has(t))) return true;
+
+  // An explicit radius such as `radial-gradient(60px 30px, …)`.
+  return tokens.every((t) => /^[-+.\d]/.test(t));
+}
 
 function resolveRadialSize(
   keyword: string,
@@ -238,7 +257,8 @@ function parseConic(args: string, box: Box, repeating: boolean): GradientPaint |
   let stopStart = 0;
 
   const head = parts[0]!;
-  if (head && (head.startsWith('from ') || head.startsWith('at ') || /^from|at\b/.test(head))) {
+  const headTokens = splitWhitespace(head ?? '').map((t) => t.toLowerCase());
+  if (headTokens.includes('from') || headTokens.includes('at')) {
     stopStart = 1;
     const [fromPart, positionPart] = splitOnAt(head);
     if (positionPart) center = parsePosition(positionPart, box);

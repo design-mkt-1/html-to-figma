@@ -3,16 +3,10 @@
   "compilerOptions": {
     "outDir": ".tsbuild",
     "rootDir": "src",
-    "lib": [
-      "ES2020",
-      "DOM",
-      "DOM.Iterable"
-    ],
-    "types": []
+    "lib": ["ES2020", "DOM"],
+    "types": ["@figma/plugin-typings"]
   },
-  "include": [
-    "src/**/*.ts"
-  ],
+  "include": ["src/**/*.ts"],
   "references": [
     {
       "path": "../schema"

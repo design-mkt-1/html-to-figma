@@ -1,0 +1,13 @@
+{
+  "name": "HTML to Figma",
+  "id": "html-to-figma-local",
+  "api": "1.0.0",
+  "editorType": ["figma"],
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["none"],
+    "reasoning": "Capture files carry their own image bytes, so the plugin never needs to reach the network."
+  }
+}

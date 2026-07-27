@@ -16,7 +16,7 @@
     "build:capture": "npm run build -w @h2f/capture",
     "build:cli": "npm run build -w @h2f/cli",
     "build:plugin": "npm run build -w @h2f/plugin",
-    "typecheck": "tsc -b",
+    "typecheck": "npm run build:capture && tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",
     "format": "prettier --write .",

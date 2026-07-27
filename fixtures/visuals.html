@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Visual fixture</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+        font-family: Arial, sans-serif;
+        background: #ffffff;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        align-items: flex-start;
+      }
+      .swatch {
+        width: 160px;
+        height: 120px;
+        border-radius: 12px;
+      }
+
+      #linear {
+        background: linear-gradient(135deg, #ff0000 0%, #0000ff 100%);
+      }
+      #radial {
+        background: radial-gradient(circle at 30% 30%, #ffff00, #ff00ff);
+      }
+      #conic {
+        background: conic-gradient(from 45deg, #ff0000, #00ff00, #0000ff, #ff0000);
+      }
+      #repeating {
+        background: repeating-linear-gradient(45deg, #333 0 10px, #eee 10px 20px);
+      }
+
+      #shadows {
+        background: #ffffff;
+        box-shadow:
+          0 1px 2px rgba(16, 24, 40, 0.06),
+          0 12px 24px rgba(16, 24, 40, 0.18);
+      }
+      #inset {
+        background: #f3f4f6;
+        box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.35);
+      }
+
+      #borders {
+        background: #ffffff;
+        border-top: 4px solid #ef4444;
+        border-right: 2px solid #ef4444;
+        border-bottom: 6px solid #ef4444;
+        border-left: 2px solid #ef4444;
+      }
+      #dashed {
+        background: #ffffff;
+        border: 3px dashed #2563eb;
+      }
+      #pill {
+        background: #10b981;
+        /* Oversized radius must clamp to a pill, not a 9999px corner. */
+        border-radius: 9999px;
+      }
+
+      #translucent {
+        background: rgba(37, 99, 235, 0.4);
+      }
+      #blurred {
+        background: #f59e0b;
+        filter: blur(3px);
+      }
+      #rotated {
+        background: #8b5cf6;
+        transform: rotate(20deg);
+      }
+      #skewed {
+        /* Unrepresentable in Figma: must be rasterized. */
+        background: #ec4899;
+        transform: skewX(20deg);
+      }
+
+      #pseudo {
+        position: relative;
+        background: #e5e7eb;
+      }
+      #pseudo::before {
+        content: '';
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        width: 40px;
+        height: 40px;
+        background: #111827;
+        border-radius: 8px;
+      }
+
+      #clipped {
+        background: #06b6d4;
+        clip-path: polygon(50% 0, 100% 100%, 0 100%);
+      }
+
+      #tall {
+        width: 160px;
+        height: 120px;
+        overflow: hidden;
+        background: #fef3c7;
+      }
+      #tall div {
+        width: 100%;
+        height: 400px;
+        background: linear-gradient(#f59e0b, #b45309);
+      }
+
+      figure {
+        margin: 0;
+      }
+      img {
+        display: block;
+        width: 160px;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="swatch" id="linear"></div>
+    <div class="swatch" id="radial"></div>
+    <div class="swatch" id="conic"></div>
+    <div class="swatch" id="repeating"></div>
+
+    <div class="swatch" id="shadows"></div>
+    <div class="swatch" id="inset"></div>
+    <div class="swatch" id="borders"></div>
+    <div class="swatch" id="dashed"></div>
+
+    <div class="swatch" id="pill"></div>
+    <div class="swatch" id="translucent"></div>
+    <div class="swatch" id="blurred"></div>
+    <div class="swatch" id="rotated"></div>
+
+    <div class="swatch" id="skewed"></div>
+    <div class="swatch" id="pseudo"></div>
+    <div class="swatch" id="clipped"></div>
+    <div id="tall"><div></div></div>
+
+    <svg id="icon" width="160" height="120" viewBox="0 0 160 120" fill="none">
+      <circle cx="80" cy="60" r="40" fill="#2563eb" />
+      <rect x="60" y="40" width="40" height="40" fill="#f59e0b" />
+    </svg>
+
+    <figure>
+      <!-- A 2x2 PNG, inlined so the fixture needs no network. -->
+      <img
+        id="photo"
+        alt="Test image"
+        src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVQI12P8z8DAwMDAxMAAJBAMDAwADkQBAyxSuXAAAAAASUVORK5CYII="
+      />
+    </figure>
+  </body>
+</html>

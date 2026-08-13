@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "HTML to Figma",
+  "version": "0.1.0",
+  "description": "Capture the page you are looking at and rebuild it in Figma as editable layers.",
+  "minimum_chrome_version": "116",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Capture for Figma"
+  },
+  "background": {
+    "service_worker": "worker.js"
+  },
+  "permissions": ["activeTab", "scripting", "downloads", "offscreen", "storage"],
+  "host_permissions": ["<all_urls>"]
+}

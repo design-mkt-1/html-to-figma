@@ -2,8 +2,8 @@
 
 A capture file is JSON (optionally gzipped, `.h2d.gz`) describing one web page as
 a resolution-independent scene tree. It is the contract between the capture
-engine and the Figma plugin, and the reason a browser extension can be added
-later without touching either side.
+engine and the Figma plugin, and the reason the same engine drives both the CLI
+and the browser extension without either side knowing which produced a file.
 
 The authoritative definition is [`packages/schema/src/types.ts`](../packages/schema/src/types.ts).
 
@@ -83,13 +83,14 @@ Deduplicated by content. Two kinds survive into a finished file:
 
 A third, `PENDING`, exists only _inside_ the capture engine. It records a
 resolved URL for the host to fetch. **A finished capture file must contain no
-`PENDING` assets**: the CLI either resolves them or prunes the referencing
+`PENDING` assets**: the host either resolves them or prunes the referencing
 nodes, because an image layer with no image imports as an invisible empty frame.
 
 This split is the extension seam. The browser engine cannot fetch cross-origin
 images — CORS forbids it, and most sites serve images from a CDN with no
 permissive header. So it names them and the host fetches them: Playwright's
-request context today, an extension service worker tomorrow.
+request context in the CLI, the service worker in the extension. Both go through
+the same code in `packages/host`, which is what keeps the two files identical.
 
 ## Layout
 

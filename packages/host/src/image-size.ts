@@ -6,6 +6,10 @@
  * base64 copy of every image in both directions. Parsing the handful of bytes
  * that actually carry the size keeps that path reserved for formats this cannot
  * read (AVIF, HEIC) and for images that genuinely need downscaling.
+ *
+ * Typed as `Uint8Array` rather than `Buffer` so the extension's service worker
+ * can use it unchanged. A `Buffer` is a `Uint8Array`, so Node callers are
+ * unaffected.
  */
 
 export interface ImageSize {
@@ -14,36 +18,43 @@ export interface ImageSize {
   mimeType: string;
 }
 
-export function readImageSize(bytes: Buffer): ImageSize | null {
-  return png(bytes) ?? gif(bytes) ?? jpeg(bytes) ?? webp(bytes) ?? bmp(bytes);
+export function readImageSize(bytes: Uint8Array): ImageSize | null {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return (
+    png(bytes, view) ??
+    gif(bytes, view) ??
+    jpeg(bytes, view) ??
+    webp(bytes, view) ??
+    bmp(bytes, view)
+  );
 }
 
-function png(b: Buffer): ImageSize | null {
+function png(b: Uint8Array, v: DataView): ImageSize | null {
   if (b.length < 24) return null;
-  if (b.readUInt32BE(0) !== 0x89504e47 || b.readUInt32BE(4) !== 0x0d0a1a0a) return null;
+  if (v.getUint32(0) !== 0x89504e47 || v.getUint32(4) !== 0x0d0a1a0a) return null;
   // The IHDR chunk is required to be first, so its offsets are fixed.
-  return { width: b.readUInt32BE(16), height: b.readUInt32BE(20), mimeType: 'image/png' };
+  return { width: v.getUint32(16), height: v.getUint32(20), mimeType: 'image/png' };
 }
 
-function gif(b: Buffer): ImageSize | null {
+function gif(b: Uint8Array, v: DataView): ImageSize | null {
   if (b.length < 10) return null;
-  if (b.toString('ascii', 0, 3) !== 'GIF') return null;
-  return { width: b.readUInt16LE(6), height: b.readUInt16LE(8), mimeType: 'image/gif' };
+  if (ascii(b, 0, 3) !== 'GIF') return null;
+  return { width: v.getUint16(6, true), height: v.getUint16(8, true), mimeType: 'image/gif' };
 }
 
-function bmp(b: Buffer): ImageSize | null {
+function bmp(b: Uint8Array, v: DataView): ImageSize | null {
   if (b.length < 26) return null;
-  if (b.toString('ascii', 0, 2) !== 'BM') return null;
+  if (ascii(b, 0, 2) !== 'BM') return null;
   return {
-    width: b.readInt32LE(18),
+    width: v.getInt32(18, true),
     // A negative height means a top-down bitmap; the magnitude is the size.
-    height: Math.abs(b.readInt32LE(22)),
+    height: Math.abs(v.getInt32(22, true)),
     mimeType: 'image/bmp',
   };
 }
 
-function jpeg(b: Buffer): ImageSize | null {
-  if (b.length < 4 || b.readUInt16BE(0) !== 0xffd8) return null;
+function jpeg(b: Uint8Array, v: DataView): ImageSize | null {
+  if (b.length < 4 || v.getUint16(0) !== 0xffd8) return null;
 
   let offset = 2;
   while (offset + 9 < b.length) {
@@ -62,7 +73,7 @@ function jpeg(b: Buffer): ImageSize | null {
     // Start of scan — past this point is entropy-coded data, no more headers.
     if (marker === 0xda) break;
 
-    const length = b.readUInt16BE(offset + 2);
+    const length = v.getUint16(offset + 2);
     if (length < 2) break;
 
     // SOF0..SOF15, excluding the DHT/JPG/DAC markers interleaved in that range.
@@ -71,8 +82,8 @@ function jpeg(b: Buffer): ImageSize | null {
 
     if (isFrameHeader) {
       return {
-        height: b.readUInt16BE(offset + 5),
-        width: b.readUInt16BE(offset + 7),
+        height: v.getUint16(offset + 5),
+        width: v.getUint16(offset + 7),
         mimeType: 'image/jpeg',
       };
     }
@@ -83,27 +94,27 @@ function jpeg(b: Buffer): ImageSize | null {
   return null;
 }
 
-function webp(b: Buffer): ImageSize | null {
+function webp(b: Uint8Array, v: DataView): ImageSize | null {
   if (b.length < 30) return null;
-  if (b.toString('ascii', 0, 4) !== 'RIFF' || b.toString('ascii', 8, 12) !== 'WEBP') return null;
+  if (ascii(b, 0, 4) !== 'RIFF' || ascii(b, 8, 12) !== 'WEBP') return null;
 
-  const chunk = b.toString('ascii', 12, 16);
+  const chunk = ascii(b, 12, 16);
 
   if (chunk === 'VP8 ') {
     // Lossy: dimensions live in the 10-byte frame header after the start code.
     return {
-      width: b.readUInt16LE(26) & 0x3fff,
-      height: b.readUInt16LE(28) & 0x3fff,
+      width: v.getUint16(26, true) & 0x3fff,
+      height: v.getUint16(28, true) & 0x3fff,
       mimeType: 'image/webp',
     };
   }
 
   if (chunk === 'VP8L') {
     // Lossless: 14 bits each, packed across four bytes.
-    const bits = b.readUInt32LE(21);
+    const bits = v.getUint32(21, true);
     return {
       width: (bits & 0x3fff) + 1,
-      height: ((bits >> 14) & 0x3fff) + 1,
+      height: ((bits >>> 14) & 0x3fff) + 1,
       mimeType: 'image/webp',
     };
   }
@@ -116,4 +127,10 @@ function webp(b: Buffer): ImageSize | null {
   }
 
   return null;
+}
+
+function ascii(bytes: Uint8Array, start: number, end: number): string {
+  let out = '';
+  for (let i = start; i < end && i < bytes.length; i++) out += String.fromCharCode(bytes[i]!);
+  return out;
 }

@@ -1,22 +1,26 @@
 import type { APIRequestContext, Page } from 'playwright';
-import type { Asset, Capture, PendingAsset, Warning } from '@h2f/schema';
-import { readImageSize } from './image-size.js';
+import type { Capture, Warning } from '@h2f/schema';
+import {
+  countPendingAssets,
+  decodeDataUrl,
+  resolveAssets as resolveWithAdapter,
+  type AssetAdapter,
+  type DecodedImage,
+  type RawBytes,
+} from '@h2f/host';
 
 export interface ResolveOptions {
   maxImageDim: number;
   verbose: boolean;
 }
 
-type AnyAsset = Asset | PendingAsset;
-
 /**
- * Turn every `PENDING` asset into real bytes.
+ * Resolve every pending asset using Playwright.
  *
- * This runs in Node rather than in the page on purpose: `fetch` from inside the
- * document is subject to CORS, and the overwhelming majority of real sites
- * serve their images from a CDN that sends no permissive `Access-Control-Allow-
- * Origin` header. Fetching through Playwright's request context reuses the
- * page's cookies and session while being bound by none of that.
+ * The orchestration — which assets to fetch, concurrency, what happens when one
+ * fails, pruning the nodes that referenced it — lives in `@h2f/host` so the CLI
+ * and the browser extension cannot drift apart. Only the two things Playwright
+ * does differently are here.
  */
 export async function resolveAssets(
   capture: Capture,
@@ -24,130 +28,40 @@ export async function resolveAssets(
   helperPage: Page,
   options: ResolveOptions,
 ): Promise<Warning[]> {
-  const warnings: Warning[] = [];
-  const assets = capture.assets as unknown as Record<string, AnyAsset>;
-
-  const pending = Object.entries(assets).filter(
-    (entry): entry is [string, PendingAsset] => entry[1].kind === 'PENDING',
-  );
-
-  if (options.verbose && pending.length > 0) {
-    process.stderr.write(`  resolving ${pending.length} assets\n`);
+  const pending = countPendingAssets(capture);
+  if (options.verbose && pending > 0) {
+    process.stderr.write(`  resolving ${pending} assets\n`);
   }
 
-  // Bounded concurrency: enough to hide latency, not enough to get throttled.
-  const CONCURRENCY = 8;
-  let cursor = 0;
-
-  const workers = Array.from({ length: Math.min(CONCURRENCY, pending.length) }, async () => {
-    while (cursor < pending.length) {
-      const index = cursor++;
-      const [ref, asset] = pending[index]!;
-
-      // Raster placeholders are filled in by the screenshot pass, not here.
-      if (asset.url === '') continue;
-
-      try {
-        const resolved = await resolveOne(asset, request, helperPage, options);
-        if (resolved) {
-          assets[ref] = resolved;
-        } else {
-          delete assets[ref];
-          warnings.push({
-            code: 'asset.unreadable',
-            message: `Could not decode image: ${short(asset.url)}`,
-          });
-        }
-      } catch (error) {
-        delete assets[ref];
-        warnings.push({
-          code: 'asset.failed',
-          message: `Could not fetch ${short(asset.url)}: ${(error as Error).message}`,
-        });
-      }
-    }
+  return resolveWithAdapter(capture, playwrightAdapter(request, helperPage), {
+    maxImageDim: options.maxImageDim,
+    // Bounded concurrency: enough to hide latency, not enough to get throttled.
+    concurrency: 8,
   });
-
-  await Promise.all(workers);
-
-  // Any node still pointing at a dropped asset would fail validation, so the
-  // references are pruned rather than left dangling.
-  pruneMissingAssets(capture, warnings);
-  return warnings;
 }
 
-async function resolveOne(
-  asset: PendingAsset,
-  request: APIRequestContext,
-  helperPage: Page,
-  options: ResolveOptions,
-): Promise<Asset | null> {
-  const { bytes, contentType } = await fetchBytes(asset.url, request);
-  if (bytes.length === 0) return null;
-
-  // SVG stays vector all the way into Figma; rasterizing it here would throw
-  // away the one asset type that imports as editable shapes.
-  if (contentType.includes('svg') || looksLikeSvg(bytes)) {
-    const markup = bytes.toString('utf8');
-    return {
-      kind: 'SVG',
-      markup,
-      width: asset.width || 0,
-      height: asset.height || 0,
-      source: asset.url,
-    };
-  }
-
-  const header = readImageSize(bytes);
-  const needsProbe = header === null;
-  const tooLarge = header !== null && Math.max(header.width, header.height) > options.maxImageDim;
-
-  if (!needsProbe && !tooLarge) {
-    return {
-      kind: 'BITMAP',
-      bytes: bytes.toString('base64'),
-      mimeType: header.mimeType,
-      width: header.width,
-      height: header.height,
-      source: asset.url,
-    };
-  }
-
-  return decodeInBrowser(bytes, contentType, helperPage, options.maxImageDim, asset.url);
-}
-
-async function fetchBytes(
-  url: string,
-  request: APIRequestContext,
-): Promise<{ bytes: Buffer; contentType: string }> {
-  if (url.startsWith('data:')) {
-    return decodeDataUrl(url);
-  }
-
-  const response = await request.get(url, { timeout: 30_000 });
-  if (!response.ok()) {
-    throw new Error(`HTTP ${response.status()}`);
-  }
-
+function playwrightAdapter(request: APIRequestContext, helperPage: Page): AssetAdapter {
   return {
-    bytes: await response.body(),
-    contentType: response.headers()['content-type'] ?? '',
+    /**
+     * Fetch through Playwright's request context rather than from inside the
+     * document: it reuses the page's cookies and session while being bound by
+     * none of the CORS rules that would block a CDN image.
+     */
+    async fetchBytes(url: string): Promise<RawBytes> {
+      const response = await request.get(url, { timeout: 30_000 });
+      if (!response.ok()) {
+        throw new Error(`HTTP ${response.status()}`);
+      }
+
+      return {
+        bytes: await response.body(),
+        contentType: response.headers()['content-type'] ?? '',
+      };
+    },
+
+    decodeImage: (bytes, contentType, maxDim) =>
+      decodeInBrowser(bytes, contentType, helperPage, maxDim),
   };
-}
-
-function decodeDataUrl(url: string): { bytes: Buffer; contentType: string } {
-  const comma = url.indexOf(',');
-  if (comma < 0) throw new Error('malformed data URL');
-
-  const header = url.slice(5, comma);
-  const payload = url.slice(comma + 1);
-  const contentType = header.split(';')[0] ?? '';
-
-  const bytes = header.includes('base64')
-    ? Buffer.from(payload, 'base64')
-    : Buffer.from(decodeURIComponent(payload), 'utf8');
-
-  return { bytes, contentType };
 }
 
 /**
@@ -158,12 +72,11 @@ function decodeDataUrl(url: string): { bytes: Buffer; contentType: string } {
  * import time.
  */
 async function decodeInBrowser(
-  bytes: Buffer,
+  bytes: Uint8Array,
   contentType: string,
   page: Page,
   maxDim: number,
-  source: string,
-): Promise<Asset | null> {
+): Promise<DecodedImage | null> {
   const result = await page.evaluate(
     async ({ b64, mime, limit }) => {
       const binary = atob(b64);
@@ -201,7 +114,11 @@ async function decodeInBrowser(
 
       return { width: w, height: h, dataUrl: canvas.toDataURL('image/png') };
     },
-    { b64: bytes.toString('base64'), mime: contentType || 'image/png', limit: maxDim },
+    {
+      b64: Buffer.from(bytes).toString('base64'),
+      mime: contentType || 'image/png',
+      limit: maxDim,
+    },
   );
 
   if (!result) return null;
@@ -209,71 +126,17 @@ async function decodeInBrowser(
   if (result.dataUrl) {
     const decoded = decodeDataUrl(result.dataUrl);
     return {
-      kind: 'BITMAP',
-      bytes: decoded.bytes.toString('base64'),
+      bytes: decoded.bytes,
       mimeType: 'image/png',
       width: result.width,
       height: result.height,
-      source,
     };
   }
 
   return {
-    kind: 'BITMAP',
-    bytes: bytes.toString('base64'),
+    bytes,
     mimeType: contentType || 'image/png',
     width: result.width,
     height: result.height,
-    source,
   };
-}
-
-function looksLikeSvg(bytes: Buffer): boolean {
-  const head = bytes.subarray(0, 256).toString('utf8').trimStart();
-  return head.startsWith('<svg') || (head.startsWith('<?xml') && head.includes('<svg'));
-}
-
-/**
- * Drop nodes whose asset failed to resolve.
- *
- * An image layer with no image is worse than no layer: it imports as an
- * invisible empty frame that the designer has to hunt down and delete.
- */
-function pruneMissingAssets(capture: Capture, warnings: Warning[]): void {
-  let dropped = 0;
-
-  const visit = (node: { children?: unknown[] } & Record<string, unknown>): boolean => {
-    const kind = node.kind as string;
-
-    if ((kind === 'IMAGE' || kind === 'SVG') && !(String(node.asset) in capture.assets)) {
-      dropped++;
-      return false;
-    }
-    if (node.rasterize !== undefined && !(String(node.rasterize) in capture.assets)) {
-      // The box itself is still meaningful even without its bitmap.
-      delete node.rasterize;
-    }
-
-    if (Array.isArray(node.children)) {
-      node.children = node.children.filter((child) =>
-        visit(child as { children?: unknown[] } & Record<string, unknown>),
-      );
-    }
-    return true;
-  };
-
-  for (const root of capture.roots) {
-    visit(root as unknown as { children?: unknown[] } & Record<string, unknown>);
-  }
-
-  if (dropped > 0) {
-    warnings.push({
-      code: 'asset.dropped',
-      message: `${dropped} image layer${dropped === 1 ? '' : 's'} removed because the source could not be fetched`,
-    });
-  }
-}
-
-function short(url: string): string {
-  return url.length > 80 ? `${url.slice(0, 77)}…` : url;
 }

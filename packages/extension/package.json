@@ -1,23 +1,21 @@
 {
-  "name": "@h2f/cli",
+  "name": "@h2f/extension",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "bin": {
-    "h2f": "./dist/h2f.mjs"
-  },
-  "main": "./src/index.ts",
   "scripts": {
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch"
   },
   "dependencies": {
     "@h2f/capture": "*",
     "@h2f/host": "*",
-    "@h2f/schema": "*",
-    "playwright": "1.56.1"
+    "@h2f/schema": "*"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
+    "@h2f/cli": "*",
+    "@types/chrome": "^0.2.5",
+    "playwright": "1.56.1",
     "typescript": "^5.7.2"
   }
 }

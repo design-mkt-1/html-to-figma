@@ -1,6 +1,6 @@
 import type { Page } from 'playwright';
 import type { Capture, Warning } from '@h2f/schema';
-import { readImageSize } from './image-size.js';
+import { dropUnresolvedRasters, readImageSize } from '@h2f/host';
 
 /** Kept in sync with `RASTER_ATTRIBUTE` in @h2f/capture. */
 const RASTER_ATTRIBUTE = 'data-h2f-raster';
@@ -62,11 +62,7 @@ export async function rasterizeMarked(
 
   // Anything still pending never got a screenshot — an element that scrolled
   // out of existence, for instance. Drop it so validation stays clean.
-  for (const [ref, asset] of Object.entries(capture.assets)) {
-    if (ref.startsWith('raster:') && asset.kind !== 'BITMAP' && asset.kind !== 'SVG') {
-      delete capture.assets[ref];
-    }
-  }
+  dropUnresolvedRasters(capture);
 
   return warnings;
 }

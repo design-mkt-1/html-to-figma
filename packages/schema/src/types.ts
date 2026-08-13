@@ -64,7 +64,7 @@ export type Asset = BitmapAsset | SvgAsset;
 
 export interface BitmapAsset {
   kind: 'BITMAP';
-  /** Base64, no data-URI prefix. Populated by the CLI, not by the capture. */
+  /** Base64, no data-URI prefix. Populated by the host, not by the capture. */
   bytes: string;
   mimeType: string;
   width: number;
@@ -84,7 +84,8 @@ export interface SvgAsset {
 
 /**
  * An asset the capture identified but could not resolve to bytes in the page.
- * The CLI fetches these in Node (no CORS) and replaces them with a real
+ * The host fetches these — Playwright in the CLI, the service worker in the
+ * extension, neither bound by CORS — and replaces them with a real
  * `BitmapAsset`. Any that survive into the final document are dropped and
  * reported as a warning.
  */

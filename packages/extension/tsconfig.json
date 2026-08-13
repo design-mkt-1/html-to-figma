@@ -3,10 +3,8 @@
   "compilerOptions": {
     "outDir": ".tsbuild",
     "rootDir": "src",
-    "lib": ["ES2022", "DOM"],
-    "types": ["node"],
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext"
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
+    "types": ["chrome"]
   },
   "include": ["src/**/*.ts"],
   "references": [

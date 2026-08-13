@@ -5,11 +5,15 @@ text, vectors and images, not a screenshot.
 
 An open-source take on [html.to.design](https://www.figma.com/community/plugin/1159123024924461424).
 
+Two ways to capture — a browser extension for the page you are looking at, and a
+CLI for everything scriptable.
+
 ```bash
-# 1. Capture a page
+# In the browser: click the extension, get a file
+# Or from a terminal:
 npx h2f capture https://example.com -o example.h2d.json
 
-# 2. Drop the file onto the Figma plugin
+# Either way: drop the file onto the Figma plugin
 ```
 
 ## How it works
@@ -20,22 +24,25 @@ npx h2f capture https://example.com -o example.h2d.json
 │ getComputedStyle + getBoundingCR │──▶│    IR     │──▶│ frames, text, vectors, images  │
 │ per element, plus asset URLs     │   │  + bytes  │   │ + inferred auto-layout         │
 └──────────────────────────────────┘   └───────────┘   └────────────────────────────────┘
-        ▲ injected by the CLI today,          ▲ drag and drop
-          by a browser extension later
+     ▲ injected by the extension               ▲ drag and drop
+       or by the CLI — same bundle
 ```
 
-| Package            | What it does                                                                    |
-| ------------------ | ------------------------------------------------------------------------------- |
-| `packages/schema`  | The intermediate representation both halves agree on, plus a validator          |
-| `packages/capture` | Browser-only DOM walker. Bundled as a standalone IIFE with no Node dependencies |
-| `packages/cli`     | Playwright driver: launches Chromium, prepares the page, resolves assets        |
-| `packages/plugin`  | The Figma plugin: IR → Figma nodes                                              |
+| Package              | What it does                                                                    |
+| -------------------- | ------------------------------------------------------------------------------- |
+| `packages/schema`    | The intermediate representation both halves agree on, plus a validator          |
+| `packages/capture`   | Browser-only DOM walker. Bundled as a standalone IIFE with no Node dependencies |
+| `packages/host`      | Host logic neither host owns alone: asset resolution, image headers, cropping   |
+| `packages/cli`       | Playwright driver: launches Chromium, prepares the page, resolves assets        |
+| `packages/extension` | Chrome and Edge extension: captures the tab you are on, logged in and all       |
+| `packages/plugin`    | The Figma plugin: IR → Figma nodes                                              |
 
 The capture engine never downloads image bytes. It records resolved URLs and
-lets the host fetch them, which sidesteps CORS entirely — and is exactly the
-shape a browser extension needs, where the service worker does the fetching.
-That is why `packages/capture` has no Node dependencies: the same bundle is
-meant to ship as a content script unchanged.
+lets the host fetch them, which sidesteps CORS entirely — the CLI fetches
+through Playwright, the extension through its service worker. `packages/capture`
+has no Node dependencies for the same reason: the extension ships the identical
+bundle the CLI injects, byte for byte, so a page cannot capture differently
+depending on which one you used.
 
 ## Install
 
@@ -46,10 +53,12 @@ npm install
 npm run build
 ```
 
-Capturing needs a Chromium that matches the pinned Playwright version:
+The CLI needs a Chromium matching the pinned Playwright version. Install it
+through the workspace, so npm resolves the pinned Playwright rather than
+downloading browsers for whatever version the registry serves today:
 
 ```bash
-npx playwright install chromium
+npm exec -w @h2f/cli -- playwright install chromium
 ```
 
 If your machine already has one you would rather use, skip that and point at it:
@@ -57,6 +66,9 @@ If your machine already has one you would rather use, skip that and point at it:
 ```bash
 export H2F_CHROMIUM=/path/to/chrome
 ```
+
+The extension needs no Chromium of its own — it runs in the browser you already
+have.
 
 ### Try it without leaving the repo
 
@@ -68,7 +80,56 @@ Serves `fixtures/site.html`, captures it, and writes `out/demo.h2d.json` next to
 a `out/demo-reference.png` of the same page. Good for checking the toolchain
 works before pointing it at anything real.
 
-## Capturing
+## The browser extension
+
+Captures the tab you are looking at, which is the only way to capture anything
+behind a login, a paywall, a feature flag or a session — the CLI's headless
+Chromium is not your browser and never sees any of it.
+
+```bash
+npm run build:extension
+```
+
+Then load `packages/extension/dist`:
+
+- **Chrome** — `chrome://extensions` → Developer mode → Load unpacked
+- **Edge** — `edge://extensions` → Developer mode → Load unpacked
+
+The same build works in both; only store submission differs. Open a page, click
+the extension, press **Capture this page**, and drop the downloaded
+`.h2d.json` onto the Figma plugin.
+
+The popup can be closed while a capture runs — the service worker owns the work,
+and reopening the popup reconnects to it.
+
+### What it asks for, and why
+
+| Permission               | Why                                                                |
+| ------------------------ | ------------------------------------------------------------------ |
+| `<all_urls>`             | Fetching images from CDNs. The page itself cannot: CORS forbids it |
+| `activeTab`, `scripting` | Injecting the capture engine into the tab you asked to capture     |
+| `downloads`              | Saving the `.h2d.json`                                             |
+| `offscreen`              | Assembling that file as a blob, which a service worker cannot do   |
+| `storage`                | Remembering your capture options                                   |
+
+Nothing is sent anywhere. Every byte goes from the page to the file on your
+disk.
+
+### Differences from the CLI
+
+- **One viewport per capture** — whatever size the window is. Multiple
+  breakpoints in one file need `chrome.debugger`, which puts a "being debugged"
+  banner across the browser, so the CLI keeps that job.
+- **Keep the tab visible.** Elements Figma cannot draw (skew, `clip-path`,
+  `<canvas>`) are photographed through the viewport, which means scrolling each
+  one into view. Chrome allows about two screenshots a second, so a page with
+  many of them takes a while; past 60 the rest are reported instead.
+- **Elements taller than the window** cannot be photographed whole, and are
+  reported as a warning rather than silently cropped.
+- **Local files** need "Allow access to file URLs" on the extension's details
+  page.
+
+## Capturing from a terminal
 
 ```bash
 node packages/cli/dist/h2f.mjs capture <url> [options]
@@ -108,6 +169,12 @@ h2f capture https://example.com --click "#accept-all" --screenshot reference.png
 
 ## Installing the Figma plugin
 
+The plugin is not optional, whichever way you capture. Figma has no public write
+path for creating layers from outside the editor — the REST API cannot make a
+frame — so something has to run _inside_ Figma. Equally, a plugin cannot read
+your logged-in browser tab. That is the whole reason this repository has two
+halves.
+
 1. `npm run build:plugin`
 2. Figma desktop → **Plugins → Development → Import plugin from manifest…**
 3. Choose `packages/plugin/manifest.json`
@@ -115,6 +182,23 @@ h2f capture https://example.com --click "#accept-all" --screenshot reference.png
 
 The plugin declares `networkAccess: none` — capture files carry their own image
 bytes, so it never reaches the network.
+
+### Getting it to other people
+
+Importing a manifest is per-machine and needs the Figma **desktop** app; Figma
+in a browser cannot read a local manifest. Two ways past that, both starting
+from the same development menu:
+
+- **Publish privately to your organization.** Teammates run it like any other
+  plugin and get updates automatically. Requires a Figma Organization or
+  Enterprise plan.
+- **Publish publicly to the Figma Community.** Goes through Figma's review.
+  `networkAccess: none` and a plugin that only reads a file the user drops on it
+  make that a short conversation.
+
+Either one replaces `"id": "html-to-figma-local"` in
+`packages/plugin/manifest.json` with a real plugin id — the current value is a
+development placeholder.
 
 ## What gets converted
 
@@ -164,7 +248,7 @@ can never break fidelity.
 
 ```bash
 npm run build       # all packages
-npm test            # 144 tests
+npm test            # 182 tests
 npm run typecheck
 npm run format
 ```
@@ -175,6 +259,12 @@ auto-layout arithmetic, so the tree the plugin produces — sizes, positions,
 layout modes, fills — is asserted directly. The capture side is covered
 end-to-end by driving a real Chromium against `fixtures/`.
 
+The extension is tested the same way: `packages/extension/test` loads the built
+extension into Chromium, drives its service worker, and reads the file it
+actually downloads. One of those tests captures a fixture through the extension
+and through the CLI and asserts the two trees match — the two hosts share a
+capture engine, so that is the test that would notice them drifting apart.
+
 Final visual confirmation still needs a human in Figma:
 
 ```bash
@@ -184,9 +274,9 @@ h2f capture https://example.com --screenshot reference.png
 
 ## Not built yet
 
-The browser extension (for logged-in and private pages), a localhost relay for
-one-click import, and Figma component detection. The package split above exists
-so each can be added without reworking the capture engine or the format.
+A localhost relay for one-click import (no file to drag), multiple breakpoints
+from the extension, and Figma component detection. The package split above
+exists so each can be added without reworking the capture engine or the format.
 
 ## Licence
 

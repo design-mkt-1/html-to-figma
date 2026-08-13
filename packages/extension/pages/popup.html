@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>HTML to Figma</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --fg: #1e1e1e;
+        --muted: #767676;
+        --line: #e6e6e6;
+        --accent: #0d99ff;
+        --danger: #d13c3c;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #2c2c2c;
+          --fg: #ffffff;
+          --muted: #b3b3b3;
+          --line: #444444;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        width: 320px;
+        margin: 0;
+        padding: 12px;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          11px/1.45 'Inter',
+          -apple-system,
+          system-ui,
+          sans-serif;
+      }
+
+      h1 {
+        margin: 0 0 2px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .subtitle {
+        margin: 0 0 12px;
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+
+      label.stacked {
+        display: block;
+      }
+
+      label.stacked span {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--muted);
+      }
+
+      input[type='text'] {
+        width: 100%;
+        padding: 5px 6px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+      }
+
+      button {
+        width: 100%;
+        padding: 7px 10px;
+        border: 0;
+        border-radius: 5px;
+        background: var(--accent);
+        color: #fff;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      button.secondary {
+        background: transparent;
+        border: 1px solid var(--line);
+        color: inherit;
+        font-weight: 400;
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 12px 0;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      .track {
+        height: 4px;
+        margin: 8px 0;
+        border-radius: 2px;
+        background: var(--line);
+        overflow: hidden;
+      }
+
+      .bar {
+        height: 100%;
+        width: 0;
+        background: var(--accent);
+        transition: width 0.2s;
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: auto auto;
+        gap: 2px 10px;
+        color: var(--muted);
+      }
+
+      .stats b {
+        color: var(--fg);
+        font-weight: 500;
+        text-align: right;
+      }
+
+      .warnings {
+        margin: 10px 0 0;
+        padding: 0;
+        list-style: none;
+        max-height: 130px;
+        overflow-y: auto;
+        color: var(--muted);
+      }
+
+      .warnings li {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 2px 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .error {
+        color: var(--danger);
+        white-space: pre-wrap;
+      }
+
+      .hint {
+        margin: 10px 0 0;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>HTML to Figma</h1>
+    <p class="subtitle" id="page">This page</p>
+
+    <section id="options">
+      <label><input type="checkbox" id="auto-layout" checked /> Infer auto-layout</label>
+      <label><input type="checkbox" id="compress" /> Compress the file (.gz)</label>
+      <label class="stacked">
+        <span>Remove before capturing (CSS selectors, comma separated)</span>
+        <input type="text" id="hide" placeholder="#cookie-banner, .newsletter-modal" />
+      </label>
+      <button id="capture">Capture this page</button>
+      <p class="hint">
+        Keep this tab visible — parts of the page are photographed as they scroll past.
+      </p>
+    </section>
+
+    <section id="progress" class="hidden">
+      <div id="phase">Working…</div>
+      <div class="track"><div class="bar" id="bar"></div></div>
+      <div class="subtitle" id="counts"></div>
+      <button class="secondary" id="cancel">Cancel</button>
+    </section>
+
+    <section id="result" class="hidden">
+      <div class="stats" id="stats"></div>
+      <ul class="warnings" id="warnings"></ul>
+      <hr />
+      <button id="again">Capture again</button>
+      <p class="hint" id="saved"></p>
+    </section>
+
+    <section id="failure" class="hidden">
+      <p class="error" id="message"></p>
+      <button id="retry">Try again</button>
+    </section>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

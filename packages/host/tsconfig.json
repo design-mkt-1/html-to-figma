@@ -3,18 +3,13 @@
   "compilerOptions": {
     "outDir": ".tsbuild",
     "rootDir": "src",
-    "lib": ["ES2022", "DOM"],
-    "types": ["node"],
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext"
+    "lib": ["ES2020"],
+    "types": []
   },
   "include": ["src/**/*.ts"],
   "references": [
     {
       "path": "../schema"
-    },
-    {
-      "path": "../host"
     }
   ]
 }

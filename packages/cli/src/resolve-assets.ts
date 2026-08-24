@@ -59,8 +59,8 @@ function playwrightAdapter(request: APIRequestContext, helperPage: Page): AssetA
       };
     },
 
-    decodeImage: (bytes, contentType, maxDim) =>
-      decodeInBrowser(bytes, contentType, helperPage, maxDim),
+    decodeImage: (bytes, contentType, maxDim, allowOriginal) =>
+      decodeInBrowser(bytes, contentType, helperPage, maxDim, allowOriginal),
   };
 }
 
@@ -76,9 +76,10 @@ async function decodeInBrowser(
   contentType: string,
   page: Page,
   maxDim: number,
+  allowOriginal: boolean,
 ): Promise<DecodedImage | null> {
   const result = await page.evaluate(
-    async ({ b64, mime, limit }) => {
+    async ({ b64, mime, limit, keepOriginal }) => {
       const binary = atob(b64);
       const data = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) data[i] = binary.charCodeAt(i);
@@ -93,7 +94,10 @@ async function decodeInBrowser(
       const { width, height } = bitmap;
       const scale = Math.min(1, limit / Math.max(width, height));
 
-      if (scale >= 1) {
+      // Original bytes survive only when they are both within the size limit
+      // and in a format Figma accepts; a full-size WebP still has to come
+      // back as PNG.
+      if (scale >= 1 && keepOriginal) {
         bitmap.close();
         return { width, height, dataUrl: null as string | null };
       }
@@ -118,6 +122,7 @@ async function decodeInBrowser(
       b64: Buffer.from(bytes).toString('base64'),
       mime: contentType || 'image/png',
       limit: maxDim,
+      keepOriginal: allowOriginal,
     },
   );
 

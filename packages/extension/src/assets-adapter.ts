@@ -38,6 +38,7 @@ export function createAssetAdapter(): AssetAdapter {
       bytes: Uint8Array,
       contentType: string,
       maxDim: number,
+      allowOriginal: boolean,
     ): Promise<DecodedImage | null> {
       let bitmap: ImageBitmap;
       try {
@@ -53,9 +54,11 @@ export function createAssetAdapter(): AssetAdapter {
         const { width, height } = bitmap;
         const scale = Math.min(1, maxDim / Math.max(width, height));
 
-        // Within the limit: the original bytes are already the best copy, and
-        // re-encoding would only cost quality and time.
-        if (scale >= 1) {
+        // Within the limit and in a format Figma accepts: the original bytes
+        // are already the best copy, and re-encoding would only cost quality
+        // and time. Otherwise (WebP, AVIF, …) fall through to the canvas,
+        // which re-encodes as PNG even at full size.
+        if (scale >= 1 && allowOriginal) {
           return { bytes, mimeType: contentType || 'image/png', width, height };
         }
 

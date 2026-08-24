@@ -22,12 +22,25 @@ export interface AssetAdapter {
   /** Fetch a URL with the page's credentials, unconstrained by CORS. */
   fetchBytes(url: string): Promise<RawBytes>;
   /**
-   * Decode an image, downscaling it to fit `maxDim`. Called only for formats
-   * `readImageSize` cannot parse and for images that exceed the limit.
-   * Returns `null` when the bytes are not a decodable image.
+   * Decode an image, downscaling it to fit `maxDim`. Called for formats
+   * `readImageSize` cannot parse, formats Figma's `createImage` rejects
+   * (WebP, AVIF, BMP, …) and images that exceed the limit.
+   *
+   * When `allowOriginal` is false the original bytes must not be returned
+   * even if no downscaling was needed — the caller knows Figma would reject
+   * them, so they have to be re-encoded (PNG). Returns `null` when the bytes
+   * are not a decodable image.
    */
-  decodeImage(bytes: Uint8Array, contentType: string, maxDim: number): Promise<DecodedImage | null>;
+  decodeImage(
+    bytes: Uint8Array,
+    contentType: string,
+    maxDim: number,
+    allowOriginal: boolean,
+  ): Promise<DecodedImage | null>;
 }
+
+/** The only bitmap formats Figma's `createImage` accepts. */
+const FIGMA_SAFE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif']);
 
 export interface ResolveOptions {
   maxImageDim: number;
@@ -138,8 +151,12 @@ async function resolveOne(
   const header = readImageSize(bytes);
   const needsProbe = header === null;
   const tooLarge = header !== null && Math.max(header.width, header.height) > options.maxImageDim;
+  // A parseable header is not enough: Figma's `createImage` takes PNG, JPEG
+  // and GIF and nothing else, so WebP and BMP go to the adapter to come back
+  // as PNG rather than being embedded as bytes the plugin cannot use.
+  const unsupported = header !== null && !FIGMA_SAFE_TYPES.has(header.mimeType);
 
-  if (!needsProbe && !tooLarge) {
+  if (!needsProbe && !tooLarge && !unsupported) {
     return {
       kind: 'BITMAP',
       bytes: toBase64(bytes),
@@ -150,7 +167,12 @@ async function resolveOne(
     };
   }
 
-  const decoded = await adapter.decodeImage(bytes, contentType, options.maxImageDim);
+  const decoded = await adapter.decodeImage(
+    bytes,
+    contentType || header?.mimeType || '',
+    options.maxImageDim,
+    !needsProbe && !unsupported,
+  );
   if (!decoded) return null;
 
   return {

@@ -161,8 +161,39 @@ describe('resolveAssets', () => {
       { maxImageDim: 4096 },
     );
 
-    expect(decodeImage).toHaveBeenCalledWith(big, 'image/png', 4096);
+    expect(decodeImage).toHaveBeenCalledWith(big, 'image/png', 4096, true);
     expect(capture.assets['img:0']).toMatchObject({ width: 4096, height: 4096 });
+  });
+
+  it('sends formats Figma rejects to the adapter to be transcoded, keeping nothing original', async () => {
+    // A 1×1 lossless WebP: `readImageSize` reads it fine, `figma.createImage`
+    // would reject it — so it must go through the adapter with
+    // `allowOriginal: false` and come back as PNG.
+    const webp = fromBase64('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==');
+
+    const decodeImage = vi.fn(async () => ({
+      bytes: PNG_1X1,
+      mimeType: 'image/png',
+      width: 1,
+      height: 1,
+    }));
+
+    const capture = makeCapture([image('img', 'img:0')], {
+      'img:0': pending('https://cdn.test/photo.webp'),
+    });
+
+    await resolveAssets(
+      capture,
+      adapter({ fetchBytes: async () => ({ bytes: webp, contentType: 'image/webp' }), decodeImage }),
+      { maxImageDim: 4096 },
+    );
+
+    expect(decodeImage).toHaveBeenCalledWith(webp, 'image/webp', 4096, false);
+    expect(capture.assets['img:0']).toMatchObject({
+      kind: 'BITMAP',
+      mimeType: 'image/png',
+      bytes: toBase64(PNG_1X1),
+    });
   });
 
   it('drops the layer and warns when a fetch fails', async () => {

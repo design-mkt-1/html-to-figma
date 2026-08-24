@@ -72,10 +72,18 @@ function parseLayer(
     return parseGradient(value, box);
   }
 
-  if (/^url\(/i.test(value)) {
+  // Chromium keeps `image-set(...)` verbatim in computed style, candidates and
+  // all, so it has to be reduced to one URL here.
+  const urlValue = /^url\(/i.test(value)
+    ? value
+    : /^(?:-webkit-)?image-set\(/i.test(value)
+      ? pickFromImageSet(value)
+      : null;
+
+  if (urlValue) {
     // Background images are fetched at the box's rendered size at minimum; the
     // host may find a larger intrinsic size and keep that instead.
-    const ref = assets.addPending(value, Math.ceil(box.width), Math.ceil(box.height));
+    const ref = assets.addPending(urlValue, Math.ceil(box.width), Math.ceil(box.height));
     if (!ref) return null;
     return {
       kind: 'IMAGE',
@@ -86,9 +94,38 @@ function parseLayer(
     };
   }
 
-  // `image-set()` resolves to a single URL in computed style in Chromium, so
-  // reaching here means something genuinely exotic (`element()`, `paint()`).
+  // Something genuinely exotic (`element()`, `paint()`).
   return null;
+}
+
+/**
+ * Pick one candidate out of `image-set(url(...) 1x, url(...) 2x, ...)`.
+ *
+ * The lowest density at or above 1x is the size the page actually rendered at
+ * on a standard display; higher densities cost bytes for pixels Figma will
+ * downscale anyway. Type hints are ignored — the host transcodes whatever
+ * format comes back.
+ */
+export function pickFromImageSet(value: string): string | null {
+  const inner = value.replace(/^(?:-webkit-)?image-set\(/i, '').replace(/\)\s*$/, '');
+
+  let best: { url: string; density: number } | null = null;
+  for (const candidate of splitTopLevel(inner)) {
+    const url =
+      /url\(\s*("[^"]*"|'[^']*'|[^)\s]*)\s*\)/i.exec(candidate)?.[0] ??
+      /^("[^"]*"|'[^']*')/.exec(candidate)?.[0] ??
+      null;
+    if (!url) continue;
+
+    const density = Number.parseFloat(/([\d.]+)(?:x|dppx)\b/i.exec(candidate)?.[1] ?? '1');
+    const better =
+      best === null ||
+      (density >= 1 && (best.density < 1 || density < best.density)) ||
+      (density < 1 && best.density < 1 && density > best.density);
+    if (better) best = { url, density };
+  }
+
+  return best?.url ?? null;
 }
 
 function backgroundScaleMode(size: string, repeat: string): ImageScaleMode {

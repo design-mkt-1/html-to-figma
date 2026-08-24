@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { pickFromImageSet } from '../src/styles/background.js';
 import { parseColor } from '../src/styles/color.js';
 import { splitTopLevel, splitWhitespace, toDegrees, toPixels } from '../src/styles/css-values.js';
 import { isGradient, parseGradient } from '../src/styles/gradient.js';
@@ -56,6 +57,34 @@ describe('colour parsing', () => {
     expect(parseColor('transparent').a).toBe(0);
     expect(parseColor('').a).toBe(0);
     expect(parseColor(null).a).toBe(0);
+  });
+});
+
+describe('image-set backgrounds', () => {
+  it('picks the lowest density at or above 1x', () => {
+    expect(
+      pickFromImageSet('image-set(url("a.png") 1x, url("a@2x.png") 2x)'),
+    ).toBe('url("a.png")');
+    expect(
+      pickFromImageSet('image-set(url("a@2x.png") 2x, url("a.png") 1x)'),
+    ).toBe('url("a.png")');
+  });
+
+  it('handles the -webkit prefix, type hints and missing densities', () => {
+    expect(
+      pickFromImageSet('-webkit-image-set(url(https://cdn.test/a.webp) type("image/webp"))'),
+    ).toBe('url(https://cdn.test/a.webp)');
+  });
+
+  it('falls back to the highest density when everything is below 1x', () => {
+    expect(
+      pickFromImageSet('image-set(url("tiny.png") 0.5x, url("small.png") 0.75x)'),
+    ).toBe('url("small.png")');
+  });
+
+  it('accepts bare string candidates and rejects empty sets', () => {
+    expect(pickFromImageSet('image-set("a.png" 1x)')).toBe('"a.png"');
+    expect(pickFromImageSet('image-set()')).toBe(null);
   });
 });
 

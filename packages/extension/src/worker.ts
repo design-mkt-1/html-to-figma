@@ -1,4 +1,3 @@
-import type { Capture } from '@h2f/schema';
 import {
   blockedReason,
   captureFilename,
@@ -33,6 +32,16 @@ let settings: CaptureSettings = { ...DEFAULT_SETTINGS };
 let running = false;
 let cancelled = false;
 
+/**
+ * The last capture's JSON, for "Copy for the Figma plugin".
+ *
+ * Held in memory only: Chrome may kill an idle service worker after ~30s, and
+ * losing it is fine — the popup gets `copyUnavailable` and tells the user to
+ * capture again. Persisting a multi-megabyte string to survive that would cost
+ * more than the click it saves.
+ */
+let lastJson: string | null = null;
+
 const ports = new Set<chrome.runtime.Port>();
 
 // Registered synchronously: an event that arrives while the worker is still
@@ -42,7 +51,7 @@ chrome.runtime.onConnect.addListener((port) => {
 
   ports.add(port);
   port.onDisconnect.addListener(() => ports.delete(port));
-  port.onMessage.addListener((message: PopupMessage) => void handlePopupMessage(message));
+  port.onMessage.addListener((message: PopupMessage) => void handlePopupMessage(message, port));
 
   send(port, { type: 'settings', settings });
   send(port, { type: 'state', state });
@@ -57,7 +66,7 @@ async function loadSettings(): Promise<void> {
   broadcast({ type: 'settings', settings });
 }
 
-async function handlePopupMessage(message: PopupMessage): Promise<void> {
+async function handlePopupMessage(message: PopupMessage, port: chrome.runtime.Port): Promise<void> {
   if (message.type === 'saveSettings') {
     settings = message.settings;
     await chrome.storage.local.set({ [SETTINGS_KEY]: settings });
@@ -66,6 +75,21 @@ async function handlePopupMessage(message: PopupMessage): Promise<void> {
 
   if (message.type === 'cancel') {
     cancelled = true;
+    return;
+  }
+
+  if (message.type === 'copy') {
+    if (lastJson === null) {
+      send(port, { type: 'copyUnavailable' });
+      return;
+    }
+    for (let offset = 0; offset < lastJson.length; offset += CHUNK_SIZE) {
+      send(port, {
+        type: 'captureJson',
+        chunk: lastJson.slice(offset, offset + CHUNK_SIZE),
+        done: offset + CHUNK_SIZE >= lastJson.length,
+      });
+    }
     return;
   }
 
@@ -104,7 +128,9 @@ async function start(tabId?: number): Promise<RunState> {
 
     setState({ status: 'running', phase: 'writing', done: 0, total: 0 });
     const filename = captureFilename(capture, settings.compress);
-    const bytes = await save(capture, filename, settings.compress);
+    const json = JSON.stringify(capture);
+    lastJson = json;
+    const bytes = await save(json, filename, settings.compress);
 
     setState({
       status: 'done',
@@ -164,10 +190,9 @@ Object.assign(self, {
  * page is far too big to pass to the downloads API as a data URL — hence the
  * offscreen document, whose only job is to be a context that has both.
  */
-async function save(capture: Capture, filename: string, compress: boolean): Promise<number> {
+async function save(json: string, filename: string, compress: boolean): Promise<number> {
   await ensureOffscreen();
 
-  const json = JSON.stringify(capture);
   await toOffscreen({ target: 'offscreen', type: 'begin' });
 
   // Chunked because a single multi-megabyte message across the extension

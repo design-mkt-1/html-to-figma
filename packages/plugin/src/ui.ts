@@ -52,18 +52,35 @@ dropZone.addEventListener('drop', (event) => {
   if (file) void load(file);
 });
 
+// The browser extension's "Copy for the Figma plugin" button puts the capture
+// JSON on the clipboard; pasting anywhere in the plugin imports it, no file in
+// between.
+document.addEventListener('paste', (event) => {
+  const text = (event as ClipboardEvent).clipboardData?.getData('text/plain');
+  if (text && text.trimStart().startsWith('{')) void loadText(text, 'clipboard');
+});
+
 // --- Loading ----------------------------------------------------------------
 
 async function load(file: File): Promise<void> {
+  if (busy) return;
+  setStatus(`Reading ${file.name}…`);
+
+  try {
+    const text = await readCaptureFile(file);
+    await loadText(text, file.name);
+  } catch (error) {
+    showError((error as Error).message);
+  }
+}
+
+async function loadText(text: string, sourceName: string): Promise<void> {
   if (busy) return;
   busy = true;
   warningsPanel.textContent = '';
 
   try {
-    setStatus(`Reading ${file.name}…`);
-    const text = await readCaptureFile(file);
-
-    setStatus('Parsing…');
+    setStatus(`Parsing ${sourceName}…`);
     const capture = JSON.parse(text) as Capture;
 
     if (!capture || typeof capture !== 'object' || !Array.isArray(capture.roots)) {

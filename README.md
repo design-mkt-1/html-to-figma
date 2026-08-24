@@ -13,7 +13,7 @@ CLI for everything scriptable.
 # Or from a terminal:
 npx h2f capture https://example.com -o example.h2d.json
 
-# Either way: drop the file onto the Figma plugin
+# Either way: drop the file onto the Figma plugin (or paste, from the extension)
 ```
 
 ## How it works
@@ -96,8 +96,14 @@ Then load `packages/extension/dist`:
 - **Edge** — `edge://extensions` → Developer mode → Load unpacked
 
 The same build works in both; only store submission differs. Open a page, click
-the extension, press **Capture this page**, and drop the downloaded
-`.h2d.json` onto the Figma plugin.
+the extension, press **Capture this page**, then either drop the downloaded
+`.h2d.json` onto the Figma plugin or press **Copy for the Figma plugin** and
+paste (Ctrl+V) straight into the plugin window — no file in between.
+
+The copy lives in the extension's service worker, so it survives closing the
+popup but not Chrome idling the worker out (about 30 seconds of inactivity).
+If the button reports the capture expired, capture again; the file on disk
+always works.
 
 The popup can be closed while a capture runs — the service worker owns the work,
 and reopening the popup reconnects to it.
@@ -111,6 +117,7 @@ and reopening the popup reconnects to it.
 | `downloads`              | Saving the `.h2d.json`                                             |
 | `offscreen`              | Assembling that file as a blob, which a service worker cannot do   |
 | `storage`                | Remembering your capture options                                   |
+| `clipboardWrite`         | The "Copy for the Figma plugin" button                             |
 
 Nothing is sent anywhere. Every byte goes from the page to the file on your
 disk.

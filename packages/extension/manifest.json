@@ -11,6 +11,6 @@
   "background": {
     "service_worker": "worker.js"
   },
-  "permissions": ["activeTab", "scripting", "downloads", "offscreen", "storage"],
+  "permissions": ["activeTab", "scripting", "downloads", "offscreen", "storage", "clipboardWrite"],
   "host_permissions": ["<all_urls>"]
 }

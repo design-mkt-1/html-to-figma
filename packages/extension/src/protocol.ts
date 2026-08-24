@@ -65,11 +65,21 @@ export type RunState =
 export type PopupMessage =
   | { type: 'start'; settings: CaptureSettings }
   | { type: 'cancel' }
-  | { type: 'saveSettings'; settings: CaptureSettings };
+  | { type: 'saveSettings'; settings: CaptureSettings }
+  /** Ask for the last capture's JSON, to put on the clipboard for the plugin. */
+  | { type: 'copy' };
 
 /** worker → popup */
 export type WorkerMessage =
-  { type: 'state'; state: RunState } | { type: 'settings'; settings: CaptureSettings };
+  | { type: 'state'; state: RunState }
+  | { type: 'settings'; settings: CaptureSettings }
+  /**
+   * The last capture, streamed in chunks — one multi-megabyte port message is
+   * the same call that fails on the offscreen bridge, so the same chunking.
+   */
+  | { type: 'captureJson'; chunk: string; done: boolean }
+  /** The worker restarted since the capture; its JSON is gone. */
+  | { type: 'copyUnavailable' };
 
 /**
  * worker → offscreen document.

@@ -37,12 +37,27 @@ const hide = el<HTMLInputElement>('hide');
 const port = chrome.runtime.connect({ name: 'popup' });
 let settings: CaptureSettings = { ...DEFAULT_SETTINGS };
 
+/** Chunks of the capture JSON being streamed over for the clipboard. */
+let jsonChunks: string[] = [];
+
 port.onMessage.addListener((message: WorkerMessage) => {
   if (message.type === 'settings') {
     settings = message.settings;
     autoLayout.checked = settings.autoLayout;
     compress.checked = settings.compress;
     hide.value = settings.hideSelectors.join(', ');
+    return;
+  }
+
+  if (message.type === 'captureJson') {
+    jsonChunks.push(message.chunk);
+    if (message.done) void copyToClipboard(jsonChunks.join(''));
+    return;
+  }
+
+  if (message.type === 'copyUnavailable') {
+    copyButton.disabled = false;
+    copyButton.textContent = 'Expired — capture again first';
     return;
   }
 
@@ -55,6 +70,25 @@ el('capture').addEventListener('click', () => post({ type: 'start', settings: re
 el('again').addEventListener('click', () => post({ type: 'start', settings: read() }));
 el('retry').addEventListener('click', () => post({ type: 'start', settings: read() }));
 el('cancel').addEventListener('click', () => post({ type: 'cancel' }));
+
+const copyButton = el<HTMLButtonElement>('copy');
+copyButton.addEventListener('click', () => {
+  copyButton.disabled = true;
+  copyButton.textContent = 'Copying…';
+  jsonChunks = [];
+  post({ type: 'copy' });
+});
+
+async function copyToClipboard(json: string): Promise<void> {
+  jsonChunks = [];
+  try {
+    await navigator.clipboard.writeText(json);
+    copyButton.textContent = 'Copied — paste in the plugin (Ctrl+V)';
+  } catch {
+    copyButton.textContent = 'Clipboard refused — use the saved file';
+  }
+  copyButton.disabled = false;
+}
 
 for (const input of [autoLayout, compress, hide]) {
   input.addEventListener('change', () => post({ type: 'saveSettings', settings: read() }));
@@ -106,6 +140,9 @@ function show(name: keyof typeof sections): void {
 }
 
 function renderSummary(summary: CaptureSummary): void {
+  copyButton.disabled = false;
+  copyButton.textContent = 'Copy for the Figma plugin';
+
   const rows: [string, string][] = [
     ['Layers', summary.layers.toLocaleString()],
     ['Assets', summary.assets.toLocaleString()],

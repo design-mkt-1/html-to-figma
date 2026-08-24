@@ -57,6 +57,15 @@ export interface BuildCallbacks {
 export class Builder {
   private readonly warnings: Warning[] = [];
   private readonly imageHashes = new Map<string, string>();
+  /**
+   * Text layers whose box had to grow beyond the captured width to keep the
+   * captured line breaks (Figma's font metrics rarely match the browser's to
+   * the pixel). Value is the final width; positions and the layout check use
+   * it instead of the captured width.
+   */
+  private readonly widthOverrides = new Map<SceneNode, number>();
+  /** How far a widened text layer must shift left so its glyphs stay put. */
+  private readonly xNudges = new Map<SceneNode, number>();
   private fonts!: FontResolver;
   private layers = 0;
   private sinceYield = 0;
@@ -238,7 +247,7 @@ export class Builder {
       if (!built) continue;
       // Position is meaningful only while the frame has no auto-layout; the
       // layout pass below either keeps these or restores them after a revert.
-      built.x = child.rect.x;
+      built.x = child.rect.x - (this.xNudges.get(built) ?? 0);
       built.y = child.rect.y;
     }
 
@@ -278,19 +287,67 @@ export class Builder {
     text.textAlignVertical = node.verticalAlign;
     text.fills = toPaints(node.base.fills, this.lookupImage);
 
-    // Fixed size, because the captured rect is the ground truth: letting Figma
-    // auto-size would re-wrap the text against slightly different metrics and
-    // shift everything below it.
-    text.textAutoResize = 'NONE';
-    resize(text, node.rect.width, node.rect.height);
+    // Segments first: a bolder run reflows the layer, so the box can only be
+    // sized once every range carries its final font.
+    this.applySegments(text, node);
+    this.fitToCapture(text, node, lineHeightPx(base.lineHeight, base.fontSize));
 
     if (node.maxLines !== null) {
       text.textTruncation = 'ENDING';
       text.maxLines = node.maxLines;
     }
 
-    this.applySegments(text, node);
     return text;
+  }
+
+  /**
+   * Size the box to the captured rect without letting the text re-wrap.
+   *
+   * The captured rect is measured against the browser's font; Figma's copy of
+   * the same family (or a substitute) is usually a hair wider, and a box sized
+   * to the browser's pixel re-wraps — "Acme" becomes "Acm / e" and everything
+   * below the extra line is overlapped. So the box grows by the smallest amount
+   * that restores the captured line count, and centred or right-aligned layers
+   * are nudged left so the glyphs stay where they were captured.
+   *
+   * Under the Node mock, `resize` never reflows, so both measurements read back
+   * the values just written and this is a no-op beyond the captured size.
+   */
+  private fitToCapture(text: TextNode, node: IrTextNode, lineHeight: number): void {
+    const captured = node.rect;
+    const capturedLines = Math.max(1, Math.round(captured.height / lineHeight));
+    let width = captured.width;
+
+    if (capturedLines === 1) {
+      // A single captured line must never wrap: Figma reports the natural
+      // width, and the box keeps whichever is wider. The baseline resize is
+      // what makes this a no-op under the mock, whose resize never reflows.
+      resize(text, captured.width, captured.height);
+      text.textAutoResize = 'WIDTH_AND_HEIGHT';
+      if (text.width > captured.width) width = text.width + 0.5;
+    } else {
+      text.textAutoResize = 'HEIGHT';
+      resize(text, captured.width, captured.height);
+
+      // Grow until the natural height fits the captured line count, within
+      // reason — a substitute font 25% wider is beyond rescuing.
+      const targetHeight = captured.height + lineHeight / 2;
+      const maxWidth = captured.width * 1.25 + 8;
+      while (text.height > targetHeight && width < maxWidth) {
+        width = Math.min(maxWidth, width * 1.02 + 1);
+        resize(text, width, text.height);
+      }
+    }
+
+    text.textAutoResize = 'NONE';
+    resize(text, width, captured.height);
+
+    const delta = width - captured.width;
+    if (delta > 0) {
+      this.widthOverrides.set(text, width);
+      if (node.align === 'CENTER') this.xNudges.set(text, delta / 2);
+      else if (node.align === 'RIGHT') this.xNudges.set(text, delta);
+    }
   }
 
   /**
@@ -433,7 +490,7 @@ export class Builder {
       return;
     }
 
-    const drift = measureDrift(frame, node.children);
+    const drift = measureDrift(frame, node.children, this.widthOverrides);
     if (drift > LAYOUT_TOLERANCE) {
       this.revertLayout(frame, node, `auto-layout moved children by up to ${drift.toFixed(1)}px`);
     }
@@ -448,9 +505,9 @@ export class Builder {
     frame.children.forEach((child, index) => {
       const source = node.children[index];
       if (!source) return;
-      child.x = source.rect.x;
+      child.x = source.rect.x - (this.xNudges.get(child) ?? 0);
       child.y = source.rect.y;
-      resize(child, source.rect.width, source.rect.height);
+      resize(child, this.widthOverrides.get(child) ?? source.rect.width, source.rect.height);
     });
 
     this.warnings.push({
@@ -493,7 +550,11 @@ function setSizing(
 }
 
 /** The largest distance any child ended up from where it was captured. */
-function measureDrift(frame: FrameNode, sources: IrNode[]): number {
+function measureDrift(
+  frame: FrameNode,
+  sources: IrNode[],
+  widthOverrides: Map<SceneNode, number>,
+): number {
   let worst = 0;
 
   frame.children.forEach((child, index) => {
@@ -504,12 +565,19 @@ function measureDrift(frame: FrameNode, sources: IrNode[]): number {
       worst,
       Math.abs(child.x - source.rect.x),
       Math.abs(child.y - source.rect.y),
-      Math.abs(child.width - source.rect.width),
+      Math.abs(child.width - (widthOverrides.get(child) ?? source.rect.width)),
       Math.abs(child.height - source.rect.height),
     );
   });
 
   return worst;
+}
+
+/** The pixel height of one line, from whatever unit the capture recorded. */
+function lineHeightPx(lineHeight: LineHeight, fontSize: number): number {
+  if (lineHeight.unit === 'PIXELS') return Math.max(1, lineHeight.value);
+  if (lineHeight.unit === 'PERCENT') return Math.max(1, (fontSize * lineHeight.value) / 100);
+  return fontSize * 1.2;
 }
 
 function applyStroke(node: FrameNode | RectangleNode, stroke: Stroke | null): void {

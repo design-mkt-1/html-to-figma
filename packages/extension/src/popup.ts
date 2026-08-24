@@ -33,6 +33,7 @@ const sections = {
 const autoLayout = el<HTMLInputElement>('auto-layout');
 const compress = el<HTMLInputElement>('compress');
 const hide = el<HTMLInputElement>('hide');
+const viewportBoxes = [...el('viewports').querySelectorAll<HTMLInputElement>('input')];
 
 const port = chrome.runtime.connect({ name: 'popup' });
 let settings: CaptureSettings = { ...DEFAULT_SETTINGS };
@@ -46,6 +47,9 @@ port.onMessage.addListener((message: WorkerMessage) => {
     autoLayout.checked = settings.autoLayout;
     compress.checked = settings.compress;
     hide.value = settings.hideSelectors.join(', ');
+    for (const box of viewportBoxes) {
+      box.checked = (settings.viewports ?? [0]).includes(Number(box.value));
+    }
     return;
   }
 
@@ -90,11 +94,13 @@ async function copyToClipboard(json: string): Promise<void> {
   copyButton.disabled = false;
 }
 
-for (const input of [autoLayout, compress, hide]) {
+for (const input of [autoLayout, compress, hide, ...viewportBoxes]) {
   input.addEventListener('change', () => post({ type: 'saveSettings', settings: read() }));
 }
 
 function read(): CaptureSettings {
+  const viewports = viewportBoxes.filter((box) => box.checked).map((box) => Number(box.value));
+
   settings = {
     ...settings,
     autoLayout: autoLayout.checked,
@@ -103,6 +109,8 @@ function read(): CaptureSettings {
       .split(',')
       .map((selector) => selector.trim())
       .filter(Boolean),
+    // Nothing ticked still means "capture something": the browser's width.
+    viewports: viewports.length > 0 ? viewports : [0],
   };
   return settings;
 }

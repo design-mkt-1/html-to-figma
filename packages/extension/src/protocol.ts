@@ -18,6 +18,12 @@ export interface CaptureSettings {
   maxImageDim: number;
   /** Parallel asset fetches. */
   concurrency: number;
+  /**
+   * Widths to capture, side by side in one file. `0` means the browser's
+   * current width and needs no emulation; every other width reflows the page
+   * through the debugger protocol for the duration of the capture.
+   */
+  viewports: number[];
 }
 
 export const DEFAULT_SETTINGS: CaptureSettings = {
@@ -26,6 +32,7 @@ export const DEFAULT_SETTINGS: CaptureSettings = {
   compress: false,
   maxImageDim: 4096,
   concurrency: 8,
+  viewports: [0],
 };
 
 export type Phase = 'preparing' | 'walking' | 'rasterizing' | 'assets' | 'writing';

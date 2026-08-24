@@ -1,7 +1,7 @@
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import { CAPTURE_BUNDLE } from '@h2f/capture/bundle';
 import { validateCapture, type Capture, type Warning } from '@h2f/schema';
-import { mergeCaptures } from './merge.js';
+import { mergeCaptures } from '@h2f/host';
 import type { CaptureCommandOptions } from './options.js';
 import { rasterizeMarked } from './raster.js';
 import { resolveAssets } from './resolve-assets.js';

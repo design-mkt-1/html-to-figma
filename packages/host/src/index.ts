@@ -13,6 +13,7 @@ export { toBase64, fromBase64 } from './base64.js';
 export { cropRegion, type CropRegion, type Rect, type Size } from './crop.js';
 export { decodeDataUrl, decodeUtf8, looksLikeSvg, type RawBytes } from './data-url.js';
 export { readImageSize, type ImageSize } from './image-size.js';
+export { mergeCaptures } from './merge.js';
 export { dropUnresolvedRasters, pruneMissingAssets } from './prune.js';
 export {
   countPendingAssets,

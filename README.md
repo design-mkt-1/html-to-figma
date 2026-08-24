@@ -118,15 +118,18 @@ and reopening the popup reconnects to it.
 | `offscreen`              | Assembling that file as a blob, which a service worker cannot do   |
 | `storage`                | Remembering your capture options                                   |
 | `clipboardWrite`         | The "Copy for the Figma plugin" button                             |
+| `debugger`               | Reflowing the page to other viewport widths (1920…390px)           |
 
 Nothing is sent anywhere. Every byte goes from the page to the file on your
 disk.
 
 ### Differences from the CLI
 
-- **One viewport per capture** — whatever size the window is. Multiple
-  breakpoints in one file need `chrome.debugger`, which puts a "being debugged"
-  banner across the browser, so the CLI keeps that job.
+- **Extra viewports show a banner.** Widths beyond the window's own are
+  emulated through `chrome.debugger`, so Chrome displays its "started
+  debugging this browser" banner while those capture; it disappears when the
+  capture finishes. Capturing only the browser's current width never attaches
+  the debugger.
 - **Keep the tab visible.** Elements Figma cannot draw (skew, `clip-path`,
   `<canvas>`) are photographed through the viewport, which means scrolling each
   one into view. Chrome allows about two screenshots a second, so a page with

@@ -1,3 +1,5 @@
+import { mergeCaptures } from '@h2f/host';
+import type { Capture } from '@h2f/schema';
 import {
   blockedReason,
   captureFilename,
@@ -6,6 +8,7 @@ import {
   groupWarnings,
   runCapture,
 } from './capture-run.js';
+import { ViewportEmulator } from './viewport.js';
 import {
   CHUNK_SIZE,
   DEFAULT_SETTINGS,
@@ -118,13 +121,32 @@ async function start(tabId?: number): Promise<RunState> {
     const blocked = await blockedReason(tab.url);
     if (blocked) throw new Error(blocked);
 
-    const capture = await runCapture({
-      tabId: tab.id,
-      windowId: tab.windowId,
-      settings,
-      report: (phase, done, total) => setState({ status: 'running', phase, done, total }),
-      isCancelled: () => cancelled,
-    });
+    // The browser's own width (0) needs no emulation; every other width
+    // reflows the page through the debugger for the duration of its capture.
+    const widths = [...new Set(settings.viewports)];
+    if (widths.length === 0) widths.push(0);
+
+    const captures: Capture[] = [];
+    const emulator = new ViewportEmulator(tab.id);
+    try {
+      for (const width of widths) {
+        if (cancelled) throw new CancelledError();
+        if (width > 0) await emulator.setWidth(width);
+        captures.push(
+          await runCapture({
+            tabId: tab.id,
+            windowId: tab.windowId,
+            settings,
+            report: (phase, done, total) => setState({ status: 'running', phase, done, total }),
+            isCancelled: () => cancelled,
+          }),
+        );
+      }
+    } finally {
+      await emulator.restore();
+    }
+
+    const capture = mergeCaptures(captures);
 
     setState({ status: 'running', phase: 'writing', done: 0, total: 0 });
     const filename = captureFilename(capture, settings.compress);

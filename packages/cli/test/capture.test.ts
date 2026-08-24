@@ -113,6 +113,17 @@ describe('layout fixture', () => {
     );
   });
 
+  it('drops visually hidden accessibility text', () => {
+    const texts = walk(doc.roots[0]!)
+      .filter((node): node is Extract<SceneNode, { kind: 'TEXT' }> => node.kind === 'TEXT')
+      .map((node) => node.characters);
+
+    expect(texts).not.toContain('Skip to content');
+    expect(texts).not.toContain('Next slide');
+    expect(texts).not.toContain('Hidden brand name');
+    expect(texts).not.toContain('Invisible caption');
+  });
+
   it('emits absolute positioning everywhere when auto-layout is off', async () => {
     const flat = await capture('layout.html', ['--no-auto-layout']);
     const modes = new Set(

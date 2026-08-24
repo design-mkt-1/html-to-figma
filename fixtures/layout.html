@@ -151,5 +151,27 @@
       <div class="badge"></div>
       <div class="badge second"></div>
     </div>
+
+    <!-- Visually hidden accessibility text; none of it may become a layer. -->
+    <span
+      style="
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+      "
+      >Skip to content</span
+    >
+    <button style="border: 0; background: none">
+      <span style="position: absolute; width: 1px; height: 1px; overflow: hidden"
+        >Next slide</span
+      >
+    </button>
+    <a href="#" style="display: block; width: 120px; text-indent: -9999px; overflow: hidden"
+      >Hidden brand name</a
+    >
+    <span style="visibility: hidden">Invisible caption</span>
   </body>
 </html>

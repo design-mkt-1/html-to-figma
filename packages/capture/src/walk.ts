@@ -174,6 +174,11 @@ export class Walker {
     // A leaf with no size and nothing to paint is not worth a layer.
     if (rect.width < 0.5 && rect.height < 0.5 && element.childElementCount === 0) return null;
 
+    // Screen-reader-only content ("Previous slide", icon labels) is visually
+    // hidden in the browser but would come out as plain visible text in Figma,
+    // overlapping whatever the sighted layout shows instead.
+    if (isVisuallyHidden(element, style, rect)) return null;
+
     const raster = this.rasterReason(element, style, transform);
     if (raster) {
       return this.rasterNode(element, style, rect, raster);
@@ -475,6 +480,12 @@ export class Walker {
    */
   private textNode(element: Element, style: CSSStyleDeclaration, rect: Rect): SceneNode | null {
     if (!isTextContainer(element)) return null;
+
+    // Text the browser does not paint: `visibility: hidden` and the classic
+    // image-replacement `text-indent: -9999px` both leave the glyphs out of
+    // the render while keeping them in the DOM.
+    if (!visibilityOf(style)) return null;
+    if ((Number.parseFloat(style.textIndent) || 0) <= -999) return null;
 
     const sample = element.textContent ?? '';
     const base = readTextStyle(style, sample);
@@ -867,6 +878,26 @@ function contentInset(style: CSSStyleDeclaration): {
 function opacityOf(style: CSSStyleDeclaration): number {
   const value = Number.parseFloat(style.opacity);
   return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
+}
+
+/**
+ * Detect the screen-reader-only idioms: a zero-area `clip` rect on an
+ * absolutely positioned box, or a box squashed to a pixel with its overflow
+ * clipped. Both hide the subtree completely in the browser, so it is dropped
+ * whole. A bare 1px box with no content survives — that is how hairline
+ * dividers are drawn.
+ */
+function isVisuallyHidden(element: Element, style: CSSStyleDeclaration, rect: Rect): boolean {
+  if (isOutOfFlow(style.position) && /^rect\((0(?:px)?(?:,\s*|\s+)){3}0(?:px)?\)$/.test(style.clip)) {
+    return true;
+  }
+
+  if ((rect.width <= 1 || rect.height <= 1) && clipsContent(style)) {
+    const hasContent = element.childElementCount > 0 || (element.textContent ?? '').trim() !== '';
+    if (hasContent) return true;
+  }
+
+  return false;
 }
 
 function visibilityOf(style: CSSStyleDeclaration): boolean {

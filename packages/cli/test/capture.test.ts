@@ -124,6 +124,52 @@ describe('layout fixture', () => {
     expect(texts).not.toContain('Invisible caption');
   });
 
+  it('keeps bare text nodes inside mixed-content elements', () => {
+    const texts = walk(doc.roots[0]!)
+      .filter((node): node is Extract<SceneNode, { kind: 'TEXT' }> => node.kind === 'TEXT')
+      .map((node) => node.characters);
+
+    // `<i style="display:flex"><b>1</b>1.41</i>` — the flex display blockifies
+    // `<b>`, so "1.41" is a loose text node the element walk used to drop.
+    expect(texts).toContain('1.41');
+    expect(texts).toContain('4.80');
+    // `<a><img />BadgeSource</a>` — loose text after a replaced element.
+    expect(texts).toContain('BadgeSource');
+  });
+
+  it('splits a painted inline badge out of its text container', () => {
+    const texts = walk(doc.roots[0]!)
+      .filter((node): node is Extract<SceneNode, { kind: 'TEXT' }> => node.kind === 'TEXT')
+      .map((node) => node.characters);
+
+    // Merged, this would come out as "Files to deliver4" with the pill lost.
+    expect(texts).toContain('Files to deliver');
+    expect(texts).toContain('4');
+
+    const badge = byName(doc, 'countbadge') as ElementNode;
+    expect(badge).toBeDefined();
+    expect(badge.fills.length).toBeGreaterThan(0);
+  });
+
+  it('captures input values, placeholders and select options', () => {
+    const texts = walk(doc.roots[0]!)
+      .filter((node): node is Extract<SceneNode, { kind: 'TEXT' }> => node.kind === 'TEXT')
+      .map((node) => node.characters);
+
+    expect(texts).toContain('2026-2027');
+    expect(texts).toContain('Type here');
+    expect(texts).toContain('Picked option');
+  });
+
+  it('rasterizes a native checkbox', () => {
+    const tick = byName(doc, 'input') as ElementNode | undefined;
+    const raster = walk(doc.roots[0]!).find(
+      (node): node is ElementNode => node.kind === 'ELEMENT' && node.rasterize !== undefined,
+    );
+    expect(tick ?? raster).toBeDefined();
+    expect(doc.warnings.some((w) => w.code === 'rasterized.nativeControl')).toBe(true);
+  });
+
   it('emits absolute positioning everywhere when auto-layout is off', async () => {
     const flat = await capture('layout.html', ['--no-auto-layout']);
     const modes = new Set(

@@ -28,6 +28,7 @@ import {
   readTextStyle,
   readVerticalAlign,
 } from './text.js';
+import { parseColor, isTransparent } from './styles/color.js';
 
 export interface WalkOptions {
   /** Infer auto-layout, or emit everything absolutely positioned. */
@@ -333,6 +334,10 @@ export class Walker {
   ): SceneNode | null {
     const tag = element.tagName;
 
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+      return this.formControlNode(element as HTMLElement, style, rect);
+    }
+
     if (tag === 'IMG') {
       return this.imageNode(element as HTMLImageElement, style, rect);
     }
@@ -360,6 +365,113 @@ export class Walker {
     }
 
     return null;
+  }
+
+  /**
+   * Form controls hold their content in `value`, not in text nodes, so the
+   * generic walk captures them as empty boxes. The value (or placeholder)
+   * becomes a text child; controls the browser paints natively (checkbox,
+   * radio, range, color, file) are screenshotted instead, because their look
+   * exists nowhere in CSS.
+   */
+  private formControlNode(
+    element: HTMLElement,
+    style: CSSStyleDeclaration,
+    rect: Rect,
+  ): SceneNode | null {
+    const tag = element.tagName;
+    const type = (element.getAttribute('type') ?? 'text').toLowerCase();
+
+    const NATIVE_WIDGETS = new Set(['checkbox', 'radio', 'range', 'color', 'file']);
+    if (tag === 'INPUT' && NATIVE_WIDGETS.has(type)) {
+      // `appearance: none` means the page styles it like any other element.
+      const appearance =
+        style.getPropertyValue('appearance') || style.getPropertyValue('-webkit-appearance');
+      if (appearance !== 'none') {
+        return this.rasterNode(element, style, rect, 'nativeControl');
+      }
+      return null;
+    }
+
+    let value = '';
+    let placeholderStyle: CSSStyleDeclaration | null = null;
+
+    if (tag === 'SELECT') {
+      const select = element as HTMLSelectElement;
+      value = select.options[select.selectedIndex]?.text ?? '';
+    } else {
+      const field = element as HTMLInputElement | HTMLTextAreaElement;
+      value = field.value ?? '';
+      if (tag === 'INPUT' && type === 'password') value = '•'.repeat(value.length);
+      if (value === '' && 'placeholder' in field && field.placeholder) {
+        value = field.placeholder;
+        try {
+          placeholderStyle = window.getComputedStyle(element, '::placeholder');
+        } catch {
+          placeholderStyle = null;
+        }
+      }
+    }
+
+    value = value.replace(/\s+/g, tag === 'TEXTAREA' ? '$&' : ' ').trim();
+    if (value === '') return null;
+
+    const base = readTextStyle(style, value);
+    if (placeholderStyle) {
+      const color = parseColor(placeholderStyle.color);
+      if (!isTransparent(color)) base.fills = [{ kind: 'SOLID', color, opacity: 1 }];
+    }
+    this.recordFont(base.family, base.weight, base.italic);
+
+    const { corners } = parseCorners(style, rect.width, rect.height);
+    const { stroke } = parseBorder(style);
+    const { effects } = parseEffects(style);
+    const background = parseBackground(style, rect, this.assets);
+    const inset = contentInset(style);
+
+    const contentWidth = Math.max(0, round(rect.width - inset.left - inset.right));
+    const contentHeight = Math.max(0, round(rect.height - inset.top - inset.bottom));
+
+    const text: TextNode = {
+      kind: 'TEXT',
+      id: this.nextId(),
+      name: nameFor(element, value),
+      rect: { x: round(inset.left), y: round(inset.top), width: contentWidth, height: contentHeight },
+      opacity: 1,
+      blendMode: 'NORMAL',
+      rotation: 0,
+      sizing: { ...DEFAULT_SIZING },
+      characters: value,
+      base,
+      segments: [],
+      align: readTextAlign(style),
+      // Single-line controls centre their value vertically; multi-line ones
+      // start at the top like the browser does.
+      verticalAlign: tag === 'TEXTAREA' ? 'TOP' : 'CENTER',
+      maxLines: tag === 'TEXTAREA' ? null : 1,
+      fills: [],
+      stroke: null,
+      corners: [0, 0, 0, 0],
+      effects: [],
+    };
+
+    return {
+      kind: 'ELEMENT',
+      id: this.nextId(),
+      name: nameFor(element),
+      rect,
+      opacity: opacityOf(style),
+      blendMode: blendModeOf(style),
+      rotation: 0,
+      sizing: { ...DEFAULT_SIZING },
+      fills: visibilityOf(style) ? background.paints : [],
+      stroke: visibilityOf(style) ? stroke : null,
+      corners,
+      effects,
+      clipsContent: true,
+      layout: this.paddedWrapperLayout(inset),
+      children: [text],
+    };
   }
 
   private imageNode(
@@ -560,16 +672,27 @@ export class Walker {
       corners,
       effects,
       clipsContent: clipsContent(style),
-      layout: {
-        mode: 'VERTICAL',
-        gap: 0,
-        counterGap: 0,
-        padding: inset,
-        wrap: false,
-        primaryAlign: 'MIN',
-        counterAlign: 'MIN',
-      },
+      layout: this.paddedWrapperLayout(inset),
       children: [text],
+    };
+  }
+
+  /** Auto-layout carrying the padding, unless auto-layout is disabled. */
+  private paddedWrapperLayout(inset: {
+    top: number;
+    right: number;
+    bottom: number;
+    left: number;
+  }): ElementNode['layout'] {
+    if (!this.options.autoLayout) return { mode: 'ABSOLUTE' };
+    return {
+      mode: 'VERTICAL',
+      gap: 0,
+      counterGap: 0,
+      padding: inset,
+      wrap: false,
+      primaryAlign: 'MIN',
+      counterAlign: 'MIN',
     };
   }
 
@@ -590,12 +713,24 @@ export class Walker {
     const children: SceneNode[] = [];
     const layoutChildren: LayoutChild[] = [];
 
-    for (const child of childElementsOf(element)) {
-      const node = this.walkElement(child, docRect, depth + 1);
+    for (const child of childNodesOf(element)) {
+      // A mixed-content element (`<i><b>1</b>1.41</i>`, `<a><img>Label</a>`)
+      // keeps text in bare text nodes between its child elements. They are not
+      // reachable through `children`, so without this branch that text
+      // silently vanishes from the capture.
+      if (child.nodeType === Node.TEXT_NODE) {
+        const node = this.looseTextNode(child as Text, style, docRect);
+        if (!node) continue;
+        children.push(node);
+        layoutChildren.push({ rect: node.rect, outOfFlow: false, grow: 0, stretches: false });
+        continue;
+      }
+
+      const node = this.walkElement(child as Element, docRect, depth + 1);
       if (!node) continue;
 
       children.push(node);
-      const childStyle = window.getComputedStyle(child);
+      const childStyle = window.getComputedStyle(child as Element);
       layoutChildren.push({
         rect: node.rect,
         outOfFlow: isOutOfFlow(childStyle.position),
@@ -664,6 +799,61 @@ export class Walker {
       clipsContent: clipsContent(style),
       layout,
       children,
+    };
+  }
+
+  /**
+   * A bare text node inside a mixed-content element, measured through a Range
+   * — text nodes have no box of their own. Styling is inherited, so the
+   * parent's computed style is the text's style.
+   */
+  private looseTextNode(
+    text: Text,
+    parentStyle: CSSStyleDeclaration,
+    parentRect: DocRect,
+  ): TextNode | null {
+    if (this.nodeCount >= this.options.maxNodes) return null;
+    if (!visibilityOf(parentStyle)) return null;
+    if ((Number.parseFloat(parentStyle.textIndent) || 0) <= -999) return null;
+
+    const characters = (text.nodeValue ?? '').replace(/\s+/g, ' ').trim();
+    if (characters === '') return null;
+
+    const range = document.createRange();
+    range.selectNodeContents(text);
+    const box = range.getBoundingClientRect();
+    if (box.width < 0.5 || box.height < 0.5) return null;
+
+    const rect: Rect = {
+      x: round(box.left + window.scrollX - parentRect.x),
+      y: round(box.top + window.scrollY - parentRect.y),
+      width: round(box.width),
+      height: round(box.height),
+    };
+
+    const base = readTextStyle(parentStyle, characters);
+    this.recordFont(base.family, base.weight, base.italic);
+    this.nodeCount++;
+
+    return {
+      kind: 'TEXT',
+      id: this.nextId(),
+      name: truncateName(characters),
+      rect,
+      opacity: 1,
+      blendMode: 'NORMAL',
+      rotation: 0,
+      sizing: { ...DEFAULT_SIZING },
+      characters,
+      base,
+      segments: [],
+      align: 'LEFT',
+      verticalAlign: 'TOP',
+      maxLines: null,
+      fills: [],
+      stroke: null,
+      corners: [0, 0, 0, 0],
+      effects: [],
     };
   }
 
@@ -794,6 +984,34 @@ function childElementsOf(element: Element): Element[] {
   return children.filter((child) => !(child as Element & { assignedSlot?: unknown }).assignedSlot);
 }
 
+/**
+ * Children to walk in document order, keeping bare text nodes.
+ *
+ * Shadow roots, slots and iframes redirect rendering elsewhere, so for those
+ * the element list is authoritative and loose text does not apply.
+ */
+function childNodesOf(element: Element): Node[] {
+  if (element.shadowRoot || element.tagName === 'SLOT' || element.tagName === 'IFRAME') {
+    return childElementsOf(element);
+  }
+
+  const nodes: Node[] = [];
+  for (const node of Array.from(element.childNodes)) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if ((node.nodeValue ?? '').trim() !== '') nodes.push(node);
+      continue;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) continue;
+    if ((node as Element & { assignedSlot?: unknown }).assignedSlot) continue;
+    nodes.push(node);
+  }
+  return nodes;
+}
+
+function truncateName(value: string): string {
+  return value.length > 40 ? `${value.slice(0, 39)}…` : value;
+}
+
 /** An element is a text container when its content is entirely inline. */
 function isTextContainer(element: Element): boolean {
   let hasText = false;
@@ -818,6 +1036,10 @@ function isTextContainer(element: Element): boolean {
     if (child.tagName === 'IMG' || child.tagName === 'svg' || child.tagName === 'CANVAS') {
       return false;
     }
+    // An inline child that paints its own box (a count badge, a highlighted
+    // pill) cannot be merged into one text layer — the merge would drop its
+    // background and padding. Split it into separate layers instead.
+    if (paintsOwnBox(style)) return false;
     if (!isTextContainer(child) && child.childElementCount > 0) return false;
     if ((child.textContent ?? '').trim() !== '') hasText = true;
   }
@@ -841,6 +1063,19 @@ function hasOwnBackground(style: CSSStyleDeclaration): boolean {
   if (style.backgroundImage && style.backgroundImage !== 'none') return true;
   const color = style.backgroundColor;
   return Boolean(color) && color !== 'rgba(0, 0, 0, 0)' && color !== 'transparent';
+}
+
+function paintsOwnBox(style: CSSStyleDeclaration): boolean {
+  if (hasOwnBackground(style)) return true;
+  // `border-style` computes per side ("none solid none none" is possible).
+  return (
+    /solid|dashed|dotted|double|groove|ridge|inset|outset/.test(style.borderStyle) &&
+    (Number.parseFloat(style.borderTopWidth) || 0) +
+      (Number.parseFloat(style.borderRightWidth) || 0) +
+      (Number.parseFloat(style.borderBottomWidth) || 0) +
+      (Number.parseFloat(style.borderLeftWidth) || 0) >
+      0
+  );
 }
 
 function clipsContent(style: CSSStyleDeclaration): boolean {

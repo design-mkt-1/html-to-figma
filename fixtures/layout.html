@@ -152,6 +152,43 @@
       <div class="badge second"></div>
     </div>
 
+    <!-- Mixed content: bare text nodes between element children. The flex
+         display blockifies the inline children, so these containers are not
+         text containers and the loose text must survive as its own layers. -->
+    <span class="odds" style="display: flex; gap: 8px; padding: 4px 24px">
+      <i style="display: flex; gap: 4px; font-style: normal"><b>1</b>1.41</i>
+      <i style="display: flex; gap: 4px; font-style: normal"><b>X</b>4.80</i>
+    </span>
+    <a href="#" class="verified" style="display: flex; align-items: center; gap: 4px; padding: 4px 24px"
+      ><img
+        alt=""
+        width="12"
+        height="12"
+        src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAADUlEQVQIW2P8z8DwHwAFBQIB6OfkUgAAAABJRU5ErkJggg=="
+      />BadgeSource</a
+    >
+
+    <!-- An inline badge that paints its own pill; merging it into the label's
+         text layer would drop the background and the visual gap. -->
+    <p class="eyebrow" style="margin: 0; padding: 4px 24px">
+      Files to deliver<span
+        class="countbadge"
+        style="background: #d8dce3; border-radius: 8px; padding: 0 6px; margin-left: 6px"
+        >4</span
+      >
+    </p>
+
+    <!-- Form controls: the value lives in a property, not a text node. -->
+    <div style="display: flex; gap: 12px; padding: 12px 24px; align-items: center">
+      <input class="season" type="text" value="2026-2027" style="padding: 6px 10px; border: 1px solid #d8dce3" />
+      <input class="empty" type="text" placeholder="Type here" style="padding: 6px 10px; border: 1px solid #d8dce3" />
+      <select class="picker" style="padding: 6px 10px">
+        <option>First option</option>
+        <option selected>Picked option</option>
+      </select>
+      <input class="tick" type="checkbox" checked />
+    </div>
+
     <!-- Visually hidden accessibility text; none of it may become a layer. -->
     <span
       style="
